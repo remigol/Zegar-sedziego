@@ -1,96 +1,390 @@
 import time
+import math
+
 from kivy.app import App
 from kivy.clock import Clock
+from kivy.core.audio import SoundLoader
 from kivy.core.window import Window
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.button import Button
-from kivy.uix.label import Label
-from kivy.uix.modalview import ModalView
-from kivy.uix.screenmanager import ScreenManager, Screen
-from kivy.uix.widget import Widget
-from kivy.graphics import Color, Ellipse, Line, Rectangle
+from kivy.animation import Animation
 from kivy.utils import platform
+from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.label import Label
+from kivy.uix.button import Button
+from kivy.uix.modalview import ModalView
+from kivy.uix.widget import Widget
+from kivy.graphics import Color, Line, Ellipse, Rectangle
 
-PREFS='referee_clock'
-def prefs():
-    if platform!='android': return None
-    from jnius import autoclass
-    return autoclass('org.kivy.android.PythonActivity').mActivity.getSharedPreferences(PREFS,0)
-def cmd(name,value=None):
-    p=prefs()
-    if not p:return
-    e=p.edit().putString('command',name).putLong('command_id',int(time.time()*1000))
-    if value is not None:e.putLong('command_value',int(value))
-    e.apply()
-def gl(k,d=0):
-    p=prefs(); return int(p.getLong(k,int(d))) if p else int(d)
-def gb(k,d=False):
-    p=prefs(); return bool(p.getBoolean(k,d)) if p else d
-def start_service():
-    if platform=='android':
+PREFS = "referee_clock"
+
+
+def android_prefs():
+    if platform != "android":
+        return None
+    try:
+        from jnius import autoclass
+        activity = autoclass("org.kivy.android.PythonActivity").mActivity
+        return activity.getSharedPreferences(PREFS, 0)
+    except Exception as e:
+        print("prefs:", e)
+        return None
+
+
+def send_service_command(command, value=0):
+    prefs = android_prefs()
+    if prefs is None:
+        return
+    try:
+        prefs.edit().putString("command", command).putLong(
+            "command_value", int(value)
+        ).putLong("command_id", int(time.time() * 1000)).apply()
+    except Exception as e:
+        print("command:", e)
+
+
+def start_android_service():
+    if platform != "android":
+        return
+    try:
+        from jnius import autoclass
+        activity = autoclass("org.kivy.android.PythonActivity").mActivity
+        autoclass("pl.omulew.zegarsedziego.ServiceReferee").start(activity, "")
+    except Exception as e:
+        print("service start:", e)
+
+
+class SplashArt(Widget):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.hand_angle = 0
+        self.bind(pos=self.redraw, size=self.redraw)
+        Clock.schedule_interval(self.animate_hand, 1 / 30)
+
+    def animate_hand(self, dt):
+        self.hand_angle = (self.hand_angle + 5) % 360
+        self.redraw()
+
+    def redraw(self, *args):
+        self.canvas.clear()
+        cx, cy = self.center
+        s = min(self.width, self.height)
+        r = max(50, s * 0.17)
+
+        with self.canvas:
+            Color(1, 1, 1, 0.95)
+
+            # Stylised referee
+            rx = cx - r * 1.65
+            ry = cy - r * 0.25
+            Ellipse(pos=(rx - r * .20, ry + r * .70), size=(r * .40, r * .40))
+            Line(points=(rx, ry + r * .68, rx, ry - r * .25), width=8)
+            Line(points=(rx, ry + r * .40, rx + r * .55, ry + r * .20), width=6)
+            Line(points=(rx, ry + r * .38, rx - r * .42, ry + r * .12), width=6)
+            Line(points=(rx, ry - r * .20, rx - r * .35, ry - r * .85), width=7)
+            Line(points=(rx, ry - r * .20, rx + r * .38, ry - r * .85), width=7)
+
+            # Whistle at raised hand
+            Rectangle(pos=(rx + r * .53, ry + r * .14), size=(r * .34, r * .16))
+            Line(points=(rx + r * .87, ry + r * .22, rx + r * 1.04, ry + r * .22), width=3)
+
+            # Clock
+            ccx = cx + r * .55
+            ccy = cy + r * .18
+            Line(circle=(ccx, ccy, r), width=4)
+            for deg in range(0, 360, 30):
+                a = math.radians(deg)
+                Line(points=(
+                    ccx + math.sin(a) * r * .79,
+                    ccy + math.cos(a) * r * .79,
+                    ccx + math.sin(a) * r * .91,
+                    ccy + math.cos(a) * r * .91
+                ), width=2)
+
+            # minute hand
+            Line(points=(ccx, ccy, ccx - r * .38, ccy + r * .30), width=5)
+
+            # animated second hand
+            a = math.radians(self.hand_angle)
+            Line(points=(
+                ccx, ccy,
+                ccx + math.sin(a) * r * .70,
+                ccy + math.cos(a) * r * .70
+            ), width=3)
+            Ellipse(pos=(ccx - 5, ccy - 5), size=(10, 10))
+
+
+class SplashScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        root = FloatLayout()
+        self.art = SplashArt(size_hint=(1, .65), pos_hint={"x": 0, "y": .17}, opacity=0)
+        self.title = Label(
+            text="ZEGAR SĘDZIEGO",
+            font_size="32sp",
+            bold=True,
+            size_hint=(1, .16),
+            pos_hint={"x": 0, "top": .96},
+            opacity=0
+        )
+        self.subtitle = Label(
+            text="GOTOWY NA MECZ",
+            font_size="17sp",
+            size_hint=(1, .10),
+            pos_hint={"x": 0, "y": .07},
+            opacity=0
+        )
+        root.add_widget(self.art)
+        root.add_widget(self.title)
+        root.add_widget(self.subtitle)
+        self.add_widget(root)
+        Clock.schedule_once(self.run_animation, .05)
+
+    def run_animation(self, *args):
+        Animation(opacity=1, duration=.45).start(self.art)
+        Animation(opacity=1, duration=.55).start(self.title)
+        Clock.schedule_once(
+            lambda *_: Animation(opacity=1, duration=.40).start(self.subtitle), .55
+        )
+
+
+class RefereeClock(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.main_seconds = 0
+        self.extra_seconds = 0
+        self.period = 1
+        self.running = False
+        self.in_extra = False
+        self.start_monotonic = None
+        self.start_total = 0
+        self.fired = set()
+
+        self.whistle = SoundLoader.load("whistle.wav")
+
+        root = BoxLayout(orientation="vertical", padding=18, spacing=12)
+        self.status = Label(text="I POŁOWA", font_size="24sp", size_hint_y=.15)
+        self.clock_label = Label(text="00:00", font_size="72sp", bold=True, size_hint_y=.40)
+        self.extra_label = Label(text="", font_size="32sp", bold=True, size_hint_y=.16)
+
+        buttons = BoxLayout(spacing=10, size_hint_y=.18)
+        self.start_button = Button(text="START", font_size="24sp")
+        edit_button = Button(text="EDYTUJ", font_size="20sp")
+        self.start_button.bind(on_release=lambda *_: self.toggle())
+        edit_button.bind(on_release=lambda *_: self.open_editor())
+        buttons.add_widget(self.start_button)
+        buttons.add_widget(edit_button)
+
+        reset_button = Button(
+            text="RESET / NASTĘPNA POŁOWA",
+            font_size="18sp",
+            size_hint_y=.14
+        )
+        reset_button.bind(on_release=lambda *_: self.reset_or_next())
+
+        root.add_widget(self.status)
+        root.add_widget(self.clock_label)
+        root.add_widget(self.extra_label)
+        root.add_widget(buttons)
+        root.add_widget(reset_button)
+        self.add_widget(root)
+
+        Clock.schedule_interval(self.tick, .10)
+
+    @staticmethod
+    def fmt(seconds):
+        seconds = max(0, int(seconds))
+        return f"{seconds // 60:02d}:{seconds % 60:02d}"
+
+    def play_whistle(self, double=False):
+        if not self.whistle:
+            print("whistle.wav not loaded")
+            return
+
+        self.whistle.stop()
+        self.whistle.play()
+
+        if double:
+            def second(*_):
+                self.whistle.stop()
+                self.whistle.play()
+            Clock.schedule_once(second, .70)
+
+    def speak_minute(self, minute):
+        if platform != "android":
+            return
         try:
             from jnius import autoclass
-            a=autoclass('org.kivy.android.PythonActivity').mActivity
-            autoclass('pl.omulew.zegarsedziego.ServiceReferee').start(a,'')
-        except Exception as e: print(e)
+            activity = autoclass("org.kivy.android.PythonActivity").mActivity
+            TextToSpeech = autoclass("android.speech.tts.TextToSpeech")
+            Locale = autoclass("java.util.Locale")
+            tts = TextToSpeech(activity, None)
 
-class Art(Widget):
-    def __init__(self,**kw):super().__init__(**kw);self.bind(pos=self.draw,size=self.draw)
-    def draw(self,*_):
-        self.canvas.clear();x,y=self.center;s=min(self.width,self.height);r=s*.18
-        with self.canvas:
-            Color(.95,.95,.95,1);Ellipse(pos=(x-r,y+r*.15),size=(2*r,2*r))
-            Color(.05,.05,.05,1);Line(circle=(x,y+r*1.15,r*.84),width=3);Line(points=(x,y+r*1.15,x,y+r*1.55),width=4);Line(points=(x,y+r*1.15,x+r*.35,y+r*.95),width=4)
-            Color(.95,.95,.95,1);Ellipse(pos=(x-r*1.8,y-r*.25),size=(r*.48,r*.48));Line(points=(x-r*1.55,y-r*.08,x-r*1.3,y-r*.8),width=10);Line(points=(x-r*1.45,y-r*.35,x-r*.95,y-r*.05),width=7);Line(points=(x-r*1.3,y-r*.78,x-r*1.62,y-r*1.25),width=7);Line(points=(x-r*1.3,y-r*.78,x-r*.98,y-r*1.25),width=7);Rectangle(pos=(x-r*1.32,y+r*.01),size=(r*.34,r*.14))
-class Splash(Screen):
-    def __init__(self,**kw):
-        super().__init__(**kw);b=BoxLayout(orientation='vertical',padding=25);b.add_widget(Label(text='ZEGAR SĘDZIEGO',font_size='31sp',bold=True,size_hint_y=.22));b.add_widget(Art());b.add_widget(Label(text='GWIZDEK • CZAS • MECZ',font_size='17sp',size_hint_y=.18));self.add_widget(b)
-class ClockScreen(Screen):
-    def __init__(self,**kw):
-        super().__init__(**kw);self.main_seconds=0;self.extra_seconds=0;self.period=1;self.in_extra=False;self.running=False;self.ds=None;self.db=0
-        b=BoxLayout(orientation='vertical',padding=18,spacing=12);self.status=Label(text='I POŁOWA',font_size='24sp',size_hint_y=.15);self.main=Label(text='00:00',font_size='72sp',bold=True,size_hint_y=.40);self.extra=Label(text='',font_size='32sp',bold=True,size_hint_y=.16)
-        row=BoxLayout(size_hint_y=.18,spacing=10);self.start=Button(text='START',font_size='24sp');self.start.bind(on_release=lambda *_:self.toggle());ed=Button(text='EDYTUJ',font_size='20sp');ed.bind(on_release=lambda *_:self.editor());row.add_widget(self.start);row.add_widget(ed)
-        self.reset=Button(text='RESET / NASTĘPNA POŁOWA',font_size='18sp',size_hint_y=.14);self.reset.bind(on_release=lambda *_:self.reset_next())
-        for w in(self.status,self.main,self.extra,row,self.reset):b.add_widget(w)
-        self.add_widget(b);Clock.schedule_interval(self.sync,.2)
-    def sync(self,*_):
-        if platform=='android':self.main_seconds=gl('main_seconds');self.extra_seconds=gl('extra_seconds');self.period=gl('period',1);self.in_extra=gb('in_extra');self.running=gb('running')
-        elif self.running and self.ds is not None:
-            total=self.db+int(time.monotonic()-self.ds);bound=2700 if self.period==1 else 5400
-            if total>=bound:self.main_seconds=bound;self.extra_seconds=total-bound;self.in_extra=True
-            else:self.main_seconds=total
-        self.refresh()
-    def refresh(self):
-        f=lambda s:f'{int(s)//60:02d}:{int(s)%60:02d}';self.main.text=f(self.main_seconds);self.extra.text='+ '+f(self.extra_seconds) if self.in_extra else '';self.status.text='I POŁOWA' if self.period==1 else 'II POŁOWA';self.start.text='STOP' if self.running else 'START'
+            def say(*_):
+                try:
+                    tts.setLanguage(Locale("pl", "PL"))
+                    tts.speak(f"{minute} minuta", 0, None, f"minute_{minute}")
+                except Exception as e:
+                    print("tts say:", e)
+
+            Clock.schedule_once(say, .8)
+        except Exception as e:
+            print("tts:", e)
+
     def toggle(self):
-        self.sync()
-        if platform=='android':cmd('stop' if self.running else 'start')
-        elif self.running:self.running=False;self.ds=None
-        else:self.running=True;self.db=self.main_seconds+self.extra_seconds;self.ds=time.monotonic()
-        Clock.schedule_once(self.sync,.15)
-    def reset_next(self):
-        self.sync();c='next_half' if self.in_extra and self.period==1 and self.main_seconds==2700 else ('finish_extra' if self.in_extra and self.period==2 and self.main_seconds==5400 else 'reset')
-        if platform=='android':cmd(c)
+        if self.running:
+            self.update_time()
+            self.running = False
+            self.start_monotonic = None
+            send_service_command("stop", self.main_seconds + self.extra_seconds)
         else:
-            self.running=False;self.ds=None;self.extra_seconds=0;self.in_extra=False
-            if c=='next_half':self.period=2;self.main_seconds=2700
-            elif c=='finish_extra':self.period=2;self.main_seconds=5400
-            else:self.period=1;self.main_seconds=0
-        Clock.schedule_once(self.sync,.15)
-    def editor(self):
-        self.sync();m=ModalView(size_hint=(.94,.62),auto_dismiss=False);b=BoxLayout(orientation='vertical',padding=14,spacing=10);v=[int(self.main_seconds)];lab=Label(text=self.fmt(v[0]),font_size='46sp',bold=True,size_hint_y=.34)
-        def ch(d):v[0]=max(0,min(5999,v[0]+d));lab.text=self.fmt(v[0])
-        b.add_widget(Label(text='EDYCJA CZASU',font_size='22sp',bold=True,size_hint_y=.22));b.add_widget(lab);r=BoxLayout(spacing=7,size_hint_y=.25)
-        for t,d in [('−1 MIN',-60),('−10 S',-10),('+10 S',10),('+1 MIN',60)]:bt=Button(text=t,font_size='16sp');bt.bind(on_release=lambda _,dd=d:ch(dd));r.add_widget(bt)
-        b.add_widget(r);rr=BoxLayout(spacing=10,size_hint_y=.25);ca=Button(text='ANULUJ');sa=Button(text='ZAPISZ');ca.bind(on_release=lambda *_:m.dismiss())
-        def save(*_):
-            if platform=='android':cmd('edit',v[0])
-            else:self.main_seconds=v[0];self.extra_seconds=0;self.in_extra=False;self.period=1 if v[0]<2700 else 2;self.running=False
-            m.dismiss();Clock.schedule_once(self.sync,.15)
-        sa.bind(on_release=save);rr.add_widget(ca);rr.add_widget(sa);b.add_widget(rr);m.add_widget(b);m.open()
-    @staticmethod
-    def fmt(s):return f'{int(s)//60:02d}:{int(s)%60:02d}'
-class RefereeClockApp(App):
+            self.running = True
+            self.start_total = self.main_seconds + self.extra_seconds
+            self.start_monotonic = time.monotonic()
+            self.play_whistle(False)
+            send_service_command("start", self.start_total)
+        self.refresh()
+
+    def update_time(self):
+        if not self.running or self.start_monotonic is None:
+            return
+
+        total = self.start_total + int(time.monotonic() - self.start_monotonic)
+        boundary = 45 * 60 if self.period == 1 else 90 * 60
+        old_main = self.main_seconds
+
+        if total >= boundary:
+            self.main_seconds = boundary
+            self.extra_seconds = total - boundary
+            self.in_extra = True
+        else:
+            self.main_seconds = total
+            self.extra_seconds = 0
+            self.in_extra = False
+
+        for minute in (15, 30, 60, 75):
+            mark = minute * 60
+            if old_main < mark <= self.main_seconds and minute not in self.fired:
+                self.fired.add(minute)
+                self.speak_minute(minute)
+
+        endpoint = 45 if self.period == 1 else 90
+        if old_main < boundary <= self.main_seconds and endpoint not in self.fired:
+            self.fired.add(endpoint)
+            self.play_whistle(True)
+
+    def tick(self, dt):
+        self.update_time()
+        self.refresh()
+
+    def refresh(self):
+        self.clock_label.text = self.fmt(self.main_seconds)
+        self.extra_label.text = (
+            "+ " + self.fmt(self.extra_seconds) if self.in_extra else ""
+        )
+        self.status.text = "I POŁOWA" if self.period == 1 else "II POŁOWA"
+        self.start_button.text = "STOP" if self.running else "START"
+
+    def reset_or_next(self):
+        self.update_time()
+        self.running = False
+        self.start_monotonic = None
+
+        if self.in_extra and self.period == 1:
+            self.period = 2
+            self.main_seconds = 45 * 60
+            self.extra_seconds = 0
+            self.in_extra = False
+            self.fired = set()
+            send_service_command("next_half", self.main_seconds)
+        elif self.in_extra and self.period == 2:
+            self.main_seconds = 90 * 60
+            self.extra_seconds = 0
+            self.in_extra = False
+            send_service_command("finish_extra", self.main_seconds)
+        else:
+            self.period = 1
+            self.main_seconds = 0
+            self.extra_seconds = 0
+            self.in_extra = False
+            self.fired = set()
+            send_service_command("reset", 0)
+
+        self.refresh()
+
+    def open_editor(self):
+        self.update_time()
+        self.running = False
+        self.start_monotonic = None
+
+        value = [int(self.main_seconds)]
+
+        modal = ModalView(size_hint=(.95, .62), auto_dismiss=False)
+        box = BoxLayout(orientation="vertical", padding=14, spacing=10)
+
+        title = Label(text="EDYCJA CZASU", font_size="22sp", bold=True, size_hint_y=.20)
+        display = Label(text=self.fmt(value[0]), font_size="48sp", bold=True, size_hint_y=.38)
+
+        controls = BoxLayout(spacing=6, size_hint_y=.28)
+
+        def change(delta):
+            value[0] = max(0, min(99 * 60 + 59, value[0] + delta))
+            display.text = self.fmt(value[0])
+
+        for text, delta in (
+            ("−1 MIN", -60),
+            ("−10 S", -10),
+            ("+10 S", 10),
+            ("+1 MIN", 60),
+        ):
+            btn = Button(text=text, font_size="15sp")
+            btn.bind(on_release=lambda _, d=delta: change(d))
+            controls.add_widget(btn)
+
+        actions = BoxLayout(spacing=10, size_hint_y=.26)
+        cancel = Button(text="ANULUJ")
+        save = Button(text="ZAPISZ")
+
+        cancel.bind(on_release=lambda *_: modal.dismiss())
+
+        def apply(*_):
+            self.main_seconds = value[0]
+            self.extra_seconds = 0
+            self.in_extra = False
+            self.period = 1 if self.main_seconds < 45 * 60 else 2
+            self.running = False
+            self.start_monotonic = None
+            self.fired = set()
+            send_service_command("edit", self.main_seconds)
+            modal.dismiss()
+            self.refresh()
+
+        save.bind(on_release=apply)
+        actions.add_widget(cancel)
+        actions.add_widget(save)
+
+        box.add_widget(title)
+        box.add_widget(display)
+        box.add_widget(controls)
+        box.add_widget(actions)
+        modal.add_widget(box)
+        modal.open()
+
+
+class RefereeApp(App):
     def build(self):
-        self.title='Zegar Sędziego';Window.clearcolor=(.04,.04,.04,1);start_service();sm=ScreenManager();sm.add_widget(Splash(name='splash'));sm.add_widget(ClockScreen(name='clock'));Clock.schedule_once(lambda *_:setattr(sm,'current','clock'),2.2);return sm
-if __name__=='__main__':RefereeClockApp().run()
+        self.title = "Zegar Sędziego"
+        Window.clearcolor = (.025, .025, .025, 1)
+
+        start_android_service()
+
+        sm = ScreenManager(transition=FadeTransition(duration=.35))
+        sm.add_widget(SplashScreen(name="splash"))
+        sm.add_widget(RefereeClock(name="clock"))
+
+        Clock.schedule_once(lambda *_: setattr(sm, "current", "clock"), 2.45)
+        return sm
+
+
+if __name__ == "__main__":
+    RefereeApp().run()
