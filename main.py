@@ -58,20 +58,36 @@ class SplashArt(Widget):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.hand_angle = 0
+        self.depth = 0.0
         self.bind(pos=self.redraw, size=self.redraw)
         Clock.schedule_interval(self.animate_hand, 1 / 30)
 
     def animate_hand(self, dt):
-        self.hand_angle = (self.hand_angle + 5) % 360
+        self.hand_angle = (self.hand_angle + 6) % 360
+        self.depth = min(1.0, self.depth + dt * 0.75)
         self.redraw()
 
     def redraw(self, *args):
         self.canvas.clear()
         cx, cy = self.center
         s = min(self.width, self.height)
-        r = max(50, s * 0.17)
+        # Faux-3D camera push-in: the objects grow and separate slightly in depth.
+        zoom = 0.72 + 0.28 * self.depth
+        r = max(50, s * 0.17) * zoom
 
         with self.canvas:
+            # Stadium tunnel / pitch perspective
+            Color(.12, .12, .12, .90)
+            Line(points=(0, self.height*.15, cx-r*.35, cy-r*.10), width=2)
+            Line(points=(self.width, self.height*.15, cx+r*.35, cy-r*.10), width=2)
+            Line(points=(0, self.height*.82, cx-r*.35, cy+r*.25), width=2)
+            Line(points=(self.width, self.height*.82, cx+r*.35, cy+r*.25), width=2)
+
+            # Floodlights
+            Color(1, 1, 1, .18 + .42*self.depth)
+            for lx in (self.width*.10, self.width*.90):
+                Ellipse(pos=(lx-r*.10, self.height*.78-r*.10), size=(r*.20,r*.20))
+
             Color(1, 1, 1, 0.95)
 
             # Stylised referee
@@ -141,10 +157,13 @@ class SplashScreen(Screen):
         Clock.schedule_once(self.run_animation, .05)
 
     def run_animation(self, *args):
-        Animation(opacity=1, duration=.45).start(self.art)
-        Animation(opacity=1, duration=.55).start(self.title)
+        self.art.opacity = 0
+        self.title.opacity = 0
+        self.subtitle.opacity = 0
+        Animation(opacity=1, duration=.55, t="out_quad").start(self.art)
+        Animation(opacity=1, duration=.70, t="out_cubic").start(self.title)
         Clock.schedule_once(
-            lambda *_: Animation(opacity=1, duration=.40).start(self.subtitle), .55
+            lambda *_: Animation(opacity=1, duration=.45, t="out_quad").start(self.subtitle), .70
         )
 
 
@@ -161,6 +180,9 @@ class RefereeClock(Screen):
         self.fired = set()
 
         self.whistle = SoundLoader.load("whistle.wav")
+        self.tts = None
+        self.tts_ready = False
+        self.init_tts()
 
         root = BoxLayout(orientation="vertical", padding=18, spacing=12)
         self.status = Label(text="I POŁOWA", font_size="24sp", size_hint_y=.15)
@@ -210,7 +232,7 @@ class RefereeClock(Screen):
                 self.whistle.play()
             Clock.schedule_once(second, .70)
 
-    def speak_minute(self, minute):
+    def init_tts(self):
         if platform != "android":
             return
         try:
@@ -218,18 +240,36 @@ class RefereeClock(Screen):
             activity = autoclass("org.kivy.android.PythonActivity").mActivity
             TextToSpeech = autoclass("android.speech.tts.TextToSpeech")
             Locale = autoclass("java.util.Locale")
-            tts = TextToSpeech(activity, None)
+            self.tts = TextToSpeech(activity, None)
 
-            def say(*_):
+            def ready(*_):
                 try:
-                    tts.setLanguage(Locale("pl", "PL"))
-                    tts.speak(f"{minute} minuta", 0, None, f"minute_{minute}")
+                    result = self.tts.setLanguage(Locale("pl", "PL"))
+                    self.tts_ready = True
+                    print("TTS ready:", result)
                 except Exception as e:
-                    print("tts say:", e)
+                    print("TTS language:", e)
 
-            Clock.schedule_once(say, .8)
+            # Keep the engine alive for the whole match; give Android time to initialize it.
+            Clock.schedule_once(ready, 1.8)
         except Exception as e:
-            print("tts:", e)
+            print("TTS init:", e)
+
+    def speak_minute(self, minute):
+        if platform != "android" or self.tts is None:
+            return
+
+        def say(*_):
+            try:
+                # QUEUE_FLUSH = 0. The persistent engine is already initialized.
+                self.tts.speak(f"{minute} minuta", 0, None, f"minute_{minute}")
+            except Exception as e:
+                print("TTS speak:", e)
+
+        if self.tts_ready:
+            say()
+        else:
+            Clock.schedule_once(say, 1.2)
 
     def toggle(self):
         if self.running:
