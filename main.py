@@ -40,6 +40,19 @@ def start_service():
             autoclass("pl.omulew.zegarsedziego.ServiceReferee").start(a,"")
         except Exception as e: print("service",e)
 
+def keep_screen_on(enabled=True):
+    if platform!="android": return
+    try:
+        from jnius import autoclass
+        activity=autoclass("org.kivy.android.PythonActivity").mActivity
+        LayoutParams=autoclass("android.view.WindowManager$LayoutParams")
+        if enabled:
+            activity.getWindow().addFlags(LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else:
+            activity.getWindow().clearFlags(LayoutParams.FLAG_KEEP_SCREEN_ON)
+    except Exception as e:
+        print("keep screen",e)
+
 class ModernButton(ButtonBehavior, Label):
     bg=ListProperty([.08,.10,.10,.96]); border=ListProperty([.25,.29,.28,1])
     radius=NumericProperty(18); pressed=BooleanProperty(False)
@@ -105,7 +118,7 @@ class Match(Screen):
         shade.bind(pos=lambda w,v:setattr(w.rect,"pos",v),size=lambda w,v:setattr(w.rect,"size",v));f.add_widget(shade)
 
         self.half=Label(text="I POŁOWA",font_size="21sp",bold=True,size_hint=(.55,.07),pos_hint={"center_x":.5,"top":.975})
-        menu=ModernButton(text="MENU",font_size="12sp",size_hint=(.18,.055),pos_hint={"x":.04,"top":.972})
+        menu=ModernButton(text="MENU",font_size="11sp",size_hint=(.18,.055),pos_hint={"x":.04,"top":.972})
         menu.bind(on_release=lambda *_:self.show_menu())
 
         self.ring=Ring(size_hint=(.92,.45),pos_hint={"center_x":.5,"center_y":.65})
@@ -113,15 +126,15 @@ class Match(Screen):
         self.extra_lbl=Label(text="",font_size="27sp",bold=True,color=(.30,1,.40,1),size_hint=(1,.07),pos_hint={"center_x":.5,"center_y":.555})
         self.notice=Label(text="",font_size="14sp",bold=True,size_hint=(.86,.055),pos_hint={"center_x":.5,"center_y":.49})
 
-        self.play=ModernButton(text="START",font_size="20sp",size_hint=(.30,.09),pos_hint={"center_x":.5,"center_y":.42},
-                               bg=[.05,.62,.12,1],border=[.35,1,.40,1],radius=36)
+        self.play=ModernButton(text="START",font_size="20sp",size_hint=(.25,.09),pos_hint={"center_x":.5,"center_y":.42},
+                               bg=[.05,.62,.12,1],border=[.35,1,.40,1],radius=44)
         self.play.bind(on_release=lambda *_:self.toggle())
 
-        adj=BoxLayout(spacing=7,size_hint=(.92,.072),pos_hint={"center_x":.5,"y":.275})
+        adj=BoxLayout(spacing=7,size_hint=(.88,.066),pos_hint={"center_x":.5,"y":.278})
         for t,d in [("-1\nMIN",-60),("-10\nS",-10),("+10\nS",10),("+1\nMIN",60)]:
             b=ModernButton(text=t,font_size="13sp");b.bind(on_release=lambda _,dd=d:self.quick(dd));adj.add_widget(b)
 
-        actions=BoxLayout(spacing=9,size_hint=(.92,.072),pos_hint={"center_x":.5,"y":.185})
+        actions=BoxLayout(spacing=9,size_hint=(.82,.066),pos_hint={"center_x":.5,"y":.192})
         ed=ModernButton(text="EDYTUJ",font_size="15sp");rs=ModernButton(text="RESET",font_size="15sp")
         ed.bind(on_release=lambda *_:self.editor());rs.bind(on_release=lambda *_:self.reset_next())
         actions.add_widget(ed);actions.add_widget(rs)
@@ -189,7 +202,7 @@ class Match(Screen):
         if self.running:
             self.update();self.running=False;self.started=None;command("stop")
         else:
-            self.running=True;self.base=self.main+self.extra;self.started=time.monotonic();self.whistle_play();command("start",self.base)
+            self.running=True;self.base=self.main+self.extra;self.started=time.monotonic();keep_screen_on(True);self.whistle_play();command("start",self.base)
         self.refresh()
 
     def update(self):
@@ -204,7 +217,7 @@ class Match(Screen):
         end=45 if self.period==1 else 90
         if old<boundary<=self.main and end not in self.fired:
             self.fired.add(end);self.whistle_play(True)
-            self.notice.text="KONIEC I POŁOWY  -  2x GWIZDEK" if end==45 else "90:00  -  2x GWIZDEK"
+            self.notice.text=""
 
     def tick(self,dt):self.update();self.refresh()
 
@@ -233,9 +246,9 @@ class Match(Screen):
         if self.in_extra and self.period==1:
             self.period=2;self.main=2700;self.extra=0;self.in_extra=False;self.fired=set();self.notice.text="II POŁOWA";command("next_half",2700)
         elif self.in_extra and self.period==2:
-            self.main=5400;self.extra=0;self.in_extra=False;self.notice.text="KONIEC MECZU";command("finish_extra",5400)
+            self.main=5400;self.extra=0;self.in_extra=False;self.notice.text="KONIEC MECZU";keep_screen_on(False);command("finish_extra",5400)
         else:
-            self.period=1;self.main=0;self.extra=0;self.in_extra=False;self.fired=set();self.notice.text="";command("reset",0)
+            self.period=1;self.main=0;self.extra=0;self.in_extra=False;self.fired=set();self.notice.text="";keep_screen_on(False);command("reset",0)
         self.refresh()
 
     def editor(self):
@@ -267,4 +280,6 @@ class RefApp(App):
         Window.clearcolor=(0,0,0,1);start_service()
         sm=ScreenManager(transition=FadeTransition(duration=.35));sm.add_widget(Splash(name="s"));sm.add_widget(Match(name="m"))
         Clock.schedule_once(lambda *_:setattr(sm,"current","m"),2.4);return sm
+    def on_stop(self):
+        keep_screen_on(False)
 if __name__=="__main__":RefApp().run()
