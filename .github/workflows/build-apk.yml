@@ -56,10 +56,9 @@ jobs:
       - name: Build APK
         env:
           JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
-          PATH: /usr/lib/jvm/temurin-17-jdk-amd64/bin:${{ env.PATH }}
-        run: |
-          java -version
-          yes | buildozer android debug
+          run: |
+            java -version
+            yes | buildozer android debug
 
       - name: Show APK
         if: always()
