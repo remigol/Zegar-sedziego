@@ -11,7 +11,7 @@ try:tts.setLanguage(Locale('pl','PL'))
 except:pass
 def whistle():
     try:
-        afd=service.getAssets().openFd('sounds/whistle.wav');mp=MP();mp.setDataSource(afd.getFileDescriptor(),afd.getStartOffset(),afd.getLength());afd.close();mp.prepare();mp.start()
+        afd=service.getAssets().openFd('whistle.wav');mp=MP();mp.setDataSource(afd.getFileDescriptor(),afd.getStartOffset(),afd.getLength());afd.close();mp.prepare();mp.start()
     except Exception as e:print('whistle',e)
 def double():whistle();time.sleep(.58);whistle()
 def speak(m):
