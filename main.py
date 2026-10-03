@@ -121,20 +121,20 @@ class Match(Screen):
         menu=ModernButton(text="MENU",font_size="11sp",size_hint=(.18,.055),pos_hint={"x":.04,"top":.972})
         menu.bind(on_release=lambda *_:self.show_menu())
 
-        self.ring=Ring(size_hint=(.92,.45),pos_hint={"center_x":.5,"center_y":.65})
-        self.clock=Label(text="00:00",font_size="64sp",bold=True,size_hint=(1,.14),pos_hint={"center_x":.5,"center_y":.66})
+        self.ring=Ring(size_hint=(.94,.47),pos_hint={"center_x":.5,"center_y":.665})
+        self.clock=Label(text="00:00",font_size="68sp",bold=True,size_hint=(1,.14),pos_hint={"center_x":.5,"center_y":.66})
         self.extra_lbl=Label(text="",font_size="27sp",bold=True,color=(.30,1,.40,1),size_hint=(1,.07),pos_hint={"center_x":.5,"center_y":.555})
         self.notice=Label(text="",font_size="14sp",bold=True,size_hint=(.86,.055),pos_hint={"center_x":.5,"center_y":.49})
 
-        self.play=ModernButton(text="START",font_size="20sp",size_hint=(.25,.09),pos_hint={"center_x":.5,"center_y":.42},
-                               bg=[.05,.62,.12,1],border=[.35,1,.40,1],radius=44)
+        self.play=ModernButton(text="START",font_size="20sp",size_hint=(.22,.095),pos_hint={"center_x":.5,"center_y":.42},
+                               bg=[.05,.62,.12,1],border=[.35,1,.40,1],radius=48)
         self.play.bind(on_release=lambda *_:self.toggle())
 
-        adj=BoxLayout(spacing=7,size_hint=(.88,.066),pos_hint={"center_x":.5,"y":.278})
+        adj=BoxLayout(spacing=7,size_hint=(.90,.066),pos_hint={"center_x":.5,"y":.275})
         for t,d in [("-1\nMIN",-60),("-10\nS",-10),("+10\nS",10),("+1\nMIN",60)]:
             b=ModernButton(text=t,font_size="13sp");b.bind(on_release=lambda _,dd=d:self.quick(dd));adj.add_widget(b)
 
-        actions=BoxLayout(spacing=9,size_hint=(.82,.066),pos_hint={"center_x":.5,"y":.192})
+        actions=BoxLayout(spacing=9,size_hint=(.84,.066),pos_hint={"center_x":.5,"y":.190})
         ed=ModernButton(text="EDYTUJ",font_size="15sp");rs=ModernButton(text="RESET",font_size="15sp")
         ed.bind(on_release=lambda *_:self.editor());rs.bind(on_release=lambda *_:self.reset_next())
         actions.add_widget(ed);actions.add_widget(rs)
@@ -217,7 +217,7 @@ class Match(Screen):
         end=45 if self.period==1 else 90
         if old<boundary<=self.main and end not in self.fired:
             self.fired.add(end);self.whistle_play(True)
-            self.notice.text=""
+            self.notice.text="KONIEC PIERWSZEJ POŁOWY" if end==45 else "KONIEC MECZU"
 
     def tick(self,dt):self.update();self.refresh()
 
@@ -246,9 +246,9 @@ class Match(Screen):
         if self.in_extra and self.period==1:
             self.period=2;self.main=2700;self.extra=0;self.in_extra=False;self.fired=set();self.notice.text="II POŁOWA";command("next_half",2700)
         elif self.in_extra and self.period==2:
-            self.main=5400;self.extra=0;self.in_extra=False;self.notice.text="KONIEC MECZU";keep_screen_on(False);command("finish_extra",5400)
+            self.main=5400;self.extra=0;self.in_extra=False;self.notice.text="KONIEC MECZU";command("finish_extra",5400)
         else:
-            self.period=1;self.main=0;self.extra=0;self.in_extra=False;self.fired=set();self.notice.text="";keep_screen_on(False);command("reset",0)
+            self.period=1;self.main=0;self.extra=0;self.in_extra=False;self.fired=set();self.notice.text="";command("reset",0)
         self.refresh()
 
     def editor(self):
@@ -278,6 +278,9 @@ class Match(Screen):
 class RefApp(App):
     def build(self):
         Window.clearcolor=(0,0,0,1);start_service()
+        # Android: keep display awake for the entire time the referee app is in foreground.
+        Clock.schedule_once(lambda *_: keep_screen_on(True), .25)
+        Clock.schedule_once(lambda *_: keep_screen_on(True), 1.5)
         sm=ScreenManager(transition=FadeTransition(duration=.35));sm.add_widget(Splash(name="s"));sm.add_widget(Match(name="m"))
         Clock.schedule_once(lambda *_:setattr(sm,"current","m"),2.4);return sm
     def on_stop(self):
