@@ -7,6 +7,37 @@ from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.modalview import ModalView
 from kivy.uix.textinput import TextInput
+from kivy.utils import platform
+import time
+
+def android_tone(double=False):
+    if platform != "android":
+        return
+    try:
+        from jnius import autoclass
+        TG = autoclass("android.media.ToneGenerator")
+        AM = autoclass("android.media.AudioManager")
+        tone = TG(AM.STREAM_MUSIC, 100)
+        tone.startTone(15, 350)
+        if double:
+            Clock.schedule_once(lambda dt: tone.startTone(15, 350), .48)
+    except Exception as e:
+        print("tone:", e)
+
+def android_speak(text):
+    if platform != "android":
+        return
+    try:
+        from jnius import autoclass
+        TTS = autoclass("android.speech.tts.TextToSpeech")
+        Locale = autoclass("java.util.Locale")
+        activity = autoclass("org.kivy.android.PythonActivity").mActivity
+        tts = TTS(activity, None)
+        Clock.schedule_once(lambda dt: (tts.setLanguage(Locale("pl","PL")),
+                                       tts.speak(text, 0, None, "clock")), .8)
+    except Exception as e:
+        print("tts:", e)
+
 
 
 class RefereeClock(BoxLayout):
@@ -25,6 +56,7 @@ class RefereeClock(BoxLayout):
         self.padding = 18
         self.spacing = 12
         self._last_tick = None
+        self._announced = set()
         self._build_ui()
         Clock.schedule_interval(self._tick, 0.1)
         self._refresh()
@@ -55,6 +87,8 @@ class RefereeClock(BoxLayout):
         self.running = not self.running
         self.start_btn.text = "STOP" if self.running else "START"
         self._last_tick = None
+        if self.running:
+            android_tone(False)
 
     def _tick(self, dt):
         if not self.running:
@@ -70,12 +104,22 @@ class RefereeClock(BoxLayout):
             if self.in_extra:
                 self.extra_seconds += 1
             else:
+                previous = int(self.main_seconds)
                 self.main_seconds += 1
+                for minute in (15, 30, 60, 75):
+                    target = minute * 60
+                    if previous < target <= self.main_seconds and minute not in self._announced:
+                        android_speak(f"{minute} minuta")
+                        self._announced.add(minute)
                 boundary = 45 * 60 if self.period == 1 else 90 * 60
                 if self.main_seconds >= boundary:
                     self.main_seconds = boundary
                     self.in_extra = True
                     self.extra_seconds = 0
+                    key = 45 if self.period == 1 else 90
+                    if key not in self._announced:
+                        android_tone(True)
+                        self._announced.add(key)
             self._refresh()
 
     def _fmt(self, sec):
@@ -98,6 +142,7 @@ class RefereeClock(BoxLayout):
         self.running = False
         self.start_btn.text = "START"
         self._fraction = 0.0
+        self._announced = set()
 
         if self.in_extra and self.period == 1 and self.main_seconds == 45 * 60:
             self.extra_seconds = 0
@@ -168,6 +213,15 @@ class RefereeClock(BoxLayout):
 class RefereeClockApp(App):
     def build(self):
         self.title = "Zegar Sędziego"
+        if platform == "android":
+            try:
+                from jnius import autoclass
+                activity = autoclass("org.kivy.android.PythonActivity").mActivity
+                activity.getWindow().addFlags(128)
+                svc = autoclass("pl.omulew.zegarsedziego.ServiceReferee")
+                svc.start(activity, "")
+            except Exception as e:
+                print("android setup:", e)
         Window.clearcolor = (0.04, 0.04, 0.04, 1)
         return RefereeClock()
 
