@@ -8,11 +8,12 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
@@ -22,7 +23,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libltdl-dev \
             python3-pip \
             python3-venv \
             openjdk-17-jdk \
@@ -30,7 +30,9 @@ jobs:
             zip \
             unzip \
             autoconf \
+            automake \
             libtool \
+            libltdl-dev \
             pkg-config \
             zlib1g-dev \
             libncurses5-dev \
@@ -39,20 +41,32 @@ jobs:
             libffi-dev \
             libssl-dev
 
-      - name: Create Python environment
+      - name: Install Buildozer
         run: |
-          python3 -m venv venv
-          source venv/bin/activate
-          pip install --upgrade pip setuptools wheel
-          pip install buildozer cython==0.29.36
+          python -m pip install --upgrade "pip<25"
+          python -m pip install "setuptools<76" wheel
+          python -m pip install buildozer cython==0.29.36
+
+      - name: Show versions
+        run: |
+          python --version
+          pip --version
+          buildozer --version
 
       - name: Build APK
         run: |
-          source venv/bin/activate
           yes | buildozer android debug
 
+      - name: Show APK
+        if: always()
+        run: |
+          echo "Zawartosc folderu bin:"
+          ls -lah bin/ || true
+
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ZegarSedziego-APK
           path: bin/*.apk
+          if-no-files-found: error
