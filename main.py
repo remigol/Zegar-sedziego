@@ -41,29 +41,42 @@ def start_service():
         except Exception as e: print("service",e)
 
 def keep_screen_on(enabled=True):
-    global _screen_wakelock
+    global _screen_wakelock, _screen_runnable
     if platform!="android": return
     try:
-        from jnius import autoclass
+        from jnius import autoclass, PythonJavaClass, java_method
         activity=autoclass("org.kivy.android.PythonActivity").mActivity
         LP=autoclass("android.view.WindowManager$LayoutParams")
-        if enabled:
-            activity.getWindow().addFlags(LP.FLAG_KEEP_SCREEN_ON)
-            activity.getWindow().getDecorView().setKeepScreenOn(True)
-            if _screen_wakelock is None:
-                Context=autoclass("android.content.Context")
-                pm=activity.getSystemService(Context.POWER_SERVICE)
-                _screen_wakelock=pm.newWakeLock(0x0000000a | 0x20000000,"ZegarSedziego:Screen")
-                _screen_wakelock.setReferenceCounted(False)
-            if not _screen_wakelock.isHeld(): _screen_wakelock.acquire()
-        else:
-            activity.getWindow().getDecorView().setKeepScreenOn(False)
-            activity.getWindow().clearFlags(LP.FLAG_KEEP_SCREEN_ON)
-            if _screen_wakelock is not None and _screen_wakelock.isHeld(): _screen_wakelock.release()
-    except Exception as e:
-        print("keep screen",e)
+        Context=autoclass("android.content.Context")
+        class UiRunnable(PythonJavaClass):
+            __javainterfaces__=["java/lang/Runnable"]
+            __javacontext__="app"
+            def __init__(self,on):
+                super().__init__(); self.on=on
+            @java_method("()V")
+            def run(self):
+                try:
+                    w=activity.getWindow()
+                    if self.on:
+                        w.addFlags(LP.FLAG_KEEP_SCREEN_ON)
+                        w.getDecorView().setKeepScreenOn(True)
+                    else:
+                        w.getDecorView().setKeepScreenOn(False)
+                        w.clearFlags(LP.FLAG_KEEP_SCREEN_ON)
+                except Exception as e: print("screen ui",e)
+        _screen_runnable=UiRunnable(enabled)
+        activity.runOnUiThread(_screen_runnable)
+        if enabled and _screen_wakelock is None:
+            pm=activity.getSystemService(Context.POWER_SERVICE)
+            PowerManager=autoclass("android.os.PowerManager")
+            _screen_wakelock=pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"ZegarSedziego:Timer")
+            _screen_wakelock.setReferenceCounted(False)
+        if enabled and _screen_wakelock is not None and not _screen_wakelock.isHeld():
+            _screen_wakelock.acquire()
+    except Exception as e: print("keep screen",e)
 
 _screen_wakelock=None
+_screen_runnable=None
 _tts=None
 _tts_ready=False
 
@@ -202,7 +215,7 @@ class Match(Screen):
     def __init__(self,**kw):
         super().__init__(**kw)
         self.main=0; self.extra=0; self.period=1; self.running=False; self.in_extra=False
-        self.started=None; self.base=0; self.fired=set(); self._extra_visual=False
+        self.started=None; self.base=0; self.fired=set(); self._extra_visual=False; self._screen_guard=0
         self.whistle=SoundLoader.load("whistle.wav")
         self.minute_audio={15:SoundLoader.load("minute_15.wav"),30:SoundLoader.load("minute_30.wav"),
                            60:SoundLoader.load("minute_60.wav"),75:SoundLoader.load("minute_75.wav")}
@@ -224,10 +237,10 @@ class Match(Screen):
         self.dial=NeonDial(size_hint=(.86,.38),pos_hint={"center_x":.5,"center_y":.69})
         self.clock=Label(text="00:00",font_size="58sp",bold=True,size_hint=(.90,.12),pos_hint={"center_x":.5,"center_y":.70})
 
-        self.extra_panel=ExtraPanel(size_hint=(.56,.095),pos_hint={"center_x":.5,"center_y":.535},opacity=0)
-        self.extra_title=Label(text="CZAS DOLICZONY",font_size="11sp",bold=True,size_hint=(.6,.03),
+        self.extra_panel=ExtraPanel(size_hint=(.60,.115),pos_hint={"center_x":.5,"center_y":.535},opacity=0)
+        self.extra_title=Label(text="CZAS DOLICZONY",font_size="12sp",bold=True,size_hint=(.6,.03),
                                pos_hint={"center_x":.5,"center_y":.555},opacity=0)
-        self.extra_lbl=Label(text="+00:01",font_size="30sp",bold=True,size_hint=(.6,.06),
+        self.extra_lbl=Label(text="+00:01",font_size="48sp",bold=True,size_hint=(.6,.06),
                              pos_hint={"center_x":.5,"center_y":.525},opacity=0)
         self.notice=Label(text="",font_size="12sp",bold=True,size_hint=(.82,.04),pos_hint={"center_x":.5,"center_y":.445})
 
@@ -283,7 +296,7 @@ class Match(Screen):
         if self.running:
             self.update(); self.running=False; self.started=None; command("stop")
         else:
-            keep_screen_on(True); self.running=True; self.base=self.main+self.extra; self.started=time.monotonic()
+            keep_screen_on(True); self._screen_guard=0; self.running=True; self.base=self.main+self.extra; self.started=time.monotonic()
             self.whistle_play(); command("start",self.base)
         self.refresh()
 
@@ -304,7 +317,10 @@ class Match(Screen):
     def tick(self,dt):
         self.update()
         if self.running:
-            keep_screen_on(True)
+            self._screen_guard += dt
+            if self._screen_guard >= 10:
+                self._screen_guard=0
+                keep_screen_on(True)
         self.refresh()
 
     def refresh(self):
@@ -324,8 +340,8 @@ class Match(Screen):
                     Animation.cancel_all(w)
                     Animation(opacity=1,d=.34,t="out_quad").start(w)
                 # short "pop" of the added-time value
-                self.extra_lbl.font_size="25sp"
-                Animation(font_size=30,d=.34,t="out_back").start(self.extra_lbl)
+                self.extra_lbl.font_size="36sp"
+                Animation(font_size=48,d=.34,t="out_back").start(self.extra_lbl)
         else:
             self._extra_visual=False
             self.extra_panel.opacity=self.extra_title.opacity=self.extra_lbl.opacity=0
@@ -374,7 +390,7 @@ class Match(Screen):
     def show_menu(self):
         m=ModalView(size_hint=(.82,.58))
         box=BoxLayout(orientation="vertical",padding=15,spacing=8)
-        box.add_widget(Label(text="ZEGAR SĘDZIEGO\nv7.1",font_size="18sp",bold=True))
+        box.add_widget(Label(text="ZEGAR SĘDZIEGO\nv7.2",font_size="18sp",bold=True))
         a=CardButton(text="TEST GWIZDKA"); a.bind(on_release=lambda *_:self.whistle_play()); box.add_widget(a)
         b=CardButton(text="TEST GŁOSU - 15 MIN"); b.bind(on_release=lambda *_:self.speak(15)); box.add_widget(b)
         c=CardButton(text="ZAMKNIJ",bg=[.03,.48,.08,.96]); c.bind(on_release=lambda *_:m.dismiss()); box.add_widget(c)
@@ -392,7 +408,8 @@ class RefApp(App):
         Clock.schedule_once(lambda *_:setattr(sm,"current","m"),2.2)
         return sm
     def on_resume(self):
-        Clock.schedule_once(lambda *_:keep_screen_on(True),.15)
+        Clock.schedule_once(lambda *_:keep_screen_on(True),.05)
+        Clock.schedule_once(lambda *_:keep_screen_on(True),.75)
     def on_pause(self):
         # Do not clear FLAG_KEEP_SCREEN_ON here: Samsung/Android can call pause
         # for transient system UI. The timer must keep the display awake.
