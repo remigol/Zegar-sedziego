@@ -41,17 +41,29 @@ def start_service():
         except Exception as e: print("service",e)
 
 def keep_screen_on(enabled=True):
+    global _screen_wakelock
     if platform!="android": return
     try:
         from jnius import autoclass
         activity=autoclass("org.kivy.android.PythonActivity").mActivity
-        LayoutParams=autoclass("android.view.WindowManager$LayoutParams")
+        LP=autoclass("android.view.WindowManager$LayoutParams")
         if enabled:
-            activity.getWindow().addFlags(LayoutParams.FLAG_KEEP_SCREEN_ON)
+            activity.getWindow().addFlags(LP.FLAG_KEEP_SCREEN_ON)
+            activity.getWindow().getDecorView().setKeepScreenOn(True)
+            if _screen_wakelock is None:
+                Context=autoclass("android.content.Context")
+                pm=activity.getSystemService(Context.POWER_SERVICE)
+                _screen_wakelock=pm.newWakeLock(0x0000000a | 0x20000000,"ZegarSedziego:Screen")
+                _screen_wakelock.setReferenceCounted(False)
+            if not _screen_wakelock.isHeld(): _screen_wakelock.acquire()
         else:
-            activity.getWindow().clearFlags(LayoutParams.FLAG_KEEP_SCREEN_ON)
+            activity.getWindow().getDecorView().setKeepScreenOn(False)
+            activity.getWindow().clearFlags(LP.FLAG_KEEP_SCREEN_ON)
+            if _screen_wakelock is not None and _screen_wakelock.isHeld(): _screen_wakelock.release()
     except Exception as e:
         print("keep screen",e)
+
+_screen_wakelock=None
 
 class ModernButton(ButtonBehavior, Label):
     bg=ListProperty([.08,.10,.10,.96]); border=ListProperty([.25,.29,.28,1])
@@ -78,6 +90,11 @@ class Ring(Widget):
         with self.canvas:
             Color(.08,.12,.11,.96);Ellipse(pos=(cx-r,cy-r),size=(2*r,2*r))
             Color(.15,.20,.18,1);Line(circle=(cx,cy,r),width=8)
+            for i in range(60):
+                a=math.radians(i*6-90)
+                rr1=r-(14 if i%5==0 else 8); rr2=r-2
+                Color(.72,.78,.74,.48 if i%5==0 else .20)
+                Line(points=(cx+math.cos(a)*rr1,cy+math.sin(a)*rr1,cx+math.cos(a)*rr2,cy+math.sin(a)*rr2),width=1.3 if i%5==0 else .7)
             col=(.22,1,.27,1) if self.mode==1 else ((.05,.67,1,1) if self.mode==2 else (1,.15,.18,1))
             Color(*col);Line(circle=(cx,cy,r,-90,-90+360*self.progress),width=9)
             Color(col[0],col[1],col[2],.15);Line(circle=(cx,cy,r-14),width=3)
@@ -107,8 +124,12 @@ class Match(Screen):
         self.main=0;self.extra=0;self.period=1;self.running=False;self.in_extra=False
         self.started=None;self.base=0;self.fired=set()
         self.whistle=SoundLoader.load("whistle.wav")
-        self.tts=None;self.tts_ready=False;self.tts_listener=None;self.pending_speech=[]
-        self.init_tts()
+        self.minute_audio={
+            15:SoundLoader.load("minute_15.wav"),
+            30:SoundLoader.load("minute_30.wav"),
+            60:SoundLoader.load("minute_60.wav"),
+            75:SoundLoader.load("minute_75.wav"),
+        }
 
         f=FloatLayout()
         f.add_widget(Image(source="stadium_bg.png",allow_stretch=True,keep_ratio=False))
@@ -185,10 +206,13 @@ class Match(Screen):
         except Exception as e:print("TTS speak",e)
 
     def speak(self,m):
-        phrases={15:"Minęło piętnaście minut",30:"Minęło trzydzieści minut",60:"Minęło sześćdziesiąt minut",75:"Minęło siedemdziesiąt pięć minut"}
-        phrase=phrases[m]
-        if self.tts_ready:self._speak_now(phrase)
-        else:self.pending_speech.append(phrase)
+        snd=self.minute_audio.get(m)
+        if snd:
+            try:
+                snd.stop(); snd.play()
+            except Exception as e: print("minute audio",m,e)
+        self.notice.text=f"MINĘŁO {m} MINUT"
+        Clock.schedule_once(lambda *_:setattr(self.notice,"text",""),2.4)
 
     def whistle_play(self,double=False):
         if not self.whistle:return
@@ -270,19 +294,26 @@ class Match(Screen):
     def show_menu(self):
         m=ModalView(size_hint=(.82,.58));box=BoxLayout(orientation="vertical",padding=18,spacing=9)
         box.add_widget(Label(text="ZEGAR SĘDZIEGO  v4.1",font_size="20sp",bold=True))
-        for t in ("ZEGAR","DŹWIĘKI","WYGLĄD","INSTRUKCJA","O APLIKACJI"):
+        for t in ("ZEGAR","WYGLĄD","INSTRUKCJA","O APLIKACJI"):
             b=ModernButton(text=t,font_size="15sp");box.add_widget(b)
+        tw=ModernButton(text="TEST GWIZDKA",font_size="14sp");tw.bind(on_release=lambda *_:self.whistle_play());box.add_widget(tw)
+        tv=ModernButton(text="TEST GŁOSU - 15 MIN",font_size="14sp");tv.bind(on_release=lambda *_:self.speak(15));box.add_widget(tv)
         close=ModernButton(text="ZAMKNIJ",bg=[.05,.50,.12,1]);close.bind(on_release=lambda *_:m.dismiss());box.add_widget(close)
         m.add_widget(box);m.open()
 
 class RefApp(App):
     def build(self):
-        Window.clearcolor=(0,0,0,1);start_service()
+        Window.clearcolor=(0,0,0,1);start_service();Clock.schedule_once(lambda *_:keep_screen_on(True),.3);Clock.schedule_once(lambda *_:keep_screen_on(True),1.5)
         # Android: keep display awake for the entire time the referee app is in foreground.
         Clock.schedule_once(lambda *_: keep_screen_on(True), .25)
         Clock.schedule_once(lambda *_: keep_screen_on(True), 1.5)
         sm=ScreenManager(transition=FadeTransition(duration=.35));sm.add_widget(Splash(name="s"));sm.add_widget(Match(name="m"))
         Clock.schedule_once(lambda *_:setattr(sm,"current","m"),2.4);return sm
+    def on_resume(self):
+        Clock.schedule_once(lambda *_:keep_screen_on(True),.2)
+    def on_pause(self):
+        keep_screen_on(False)
+        return True
     def on_stop(self):
         keep_screen_on(False)
 if __name__=="__main__":RefApp().run()
