@@ -282,7 +282,7 @@ class Match(Screen):
     def toggle(self):
         if self.running:
             self.update(); self.running=False; self.started=None; command("stop")
-                else:
+        else:
             keep_screen_on(True); self.running=True; self.base=self.main+self.extra; self.started=time.monotonic()
             self.whistle_play(); command("start",self.base)
         self.refresh()
