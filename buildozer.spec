@@ -4,7 +4,7 @@ package.name = zegarsedziego
 package.domain = pl.omulew
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,wav
-version = 7.0
+version = 7.1
 requirements = python3==3.11.14,hostpython3==3.11.14,kivy,pyjnius
 orientation = portrait
 fullscreen = 0

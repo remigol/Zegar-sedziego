@@ -64,6 +64,55 @@ def keep_screen_on(enabled=True):
         print("keep screen",e)
 
 _screen_wakelock=None
+_tts=None
+_tts_ready=False
+
+def init_tts():
+    """Initialize Android Polish TTS once and keep the Java object alive."""
+    global _tts, _tts_ready
+    if platform!="android":
+        return
+    try:
+        from jnius import autoclass, PythonJavaClass, java_method
+        activity=autoclass("org.kivy.android.PythonActivity").mActivity
+        TextToSpeech=autoclass("android.speech.tts.TextToSpeech")
+        Locale=autoclass("java.util.Locale")
+        class Listener(PythonJavaClass):
+            __javainterfaces__=["android/speech/tts/TextToSpeech$OnInitListener"]
+            __javacontext__="app"
+            @java_method("(I)V")
+            def onInit(self,status):
+                global _tts_ready
+                try:
+                    if status==0:
+                        _tts.setLanguage(Locale("pl","PL"))
+                        _tts.setSpeechRate(0.92)
+                        _tts_ready=True
+                except Exception as e:
+                    print("tts init callback",e)
+        global _tts_listener
+        _tts_listener=Listener()
+        _tts=TextToSpeech(activity,_tts_listener)
+    except Exception as e:
+        print("tts init",e)
+
+def speak_android(text):
+    if platform!="android":
+        return False
+    try:
+        if _tts is None or not _tts_ready:
+            init_tts()
+            return False
+        TextToSpeech=autoclass("android.speech.tts.TextToSpeech")
+        Build=autoclass("android.os.Build$VERSION")
+        if Build.SDK_INT>=21:
+            _tts.speak(text,TextToSpeech.QUEUE_FLUSH,None,"referee_minute")
+        else:
+            _tts.speak(text,TextToSpeech.QUEUE_FLUSH,None)
+        return True
+    except Exception as e:
+        print("tts speak",e)
+        return False
 
 
 class CardButton(ButtonBehavior, Label):
@@ -153,7 +202,7 @@ class Match(Screen):
     def __init__(self,**kw):
         super().__init__(**kw)
         self.main=0; self.extra=0; self.period=1; self.running=False; self.in_extra=False
-        self.started=None; self.base=0; self.fired=set()
+        self.started=None; self.base=0; self.fired=set(); self._extra_visual=False
         self.whistle=SoundLoader.load("whistle.wav")
         self.minute_audio={15:SoundLoader.load("minute_15.wav"),30:SoundLoader.load("minute_30.wav"),
                            60:SoundLoader.load("minute_60.wav"),75:SoundLoader.load("minute_75.wav")}
@@ -161,28 +210,28 @@ class Match(Screen):
         f.add_widget(Image(source="stadium_bg.png",allow_stretch=True,keep_ratio=False))
         shade=Widget()
         with shade.canvas:
-            Color(0,0,0,.22); shade.r=Rectangle(pos=shade.pos,size=shade.size)
+            Color(0,0,0,.38); shade.r=Rectangle(pos=shade.pos,size=shade.size)
         shade.bind(pos=lambda w,v:setattr(w.r,"pos",v),size=lambda w,v:setattr(w.r,"size",v)); f.add_widget(shade)
 
-        menu=CardButton(text="≡",font_size="27sp",size_hint=(.105,.055),pos_hint={"x":.025,"top":.972},
+        menu=CardButton(text="MENU",font_size="11sp",size_hint=(.105,.055),pos_hint={"x":.025,"top":.972},
                         bg=[0,0,0,.30],border=[0,0,0,0],radius=12)
         menu.bind(on_release=lambda *_:self.show_menu())
-        self.half=Label(text="I POŁOWA ⌄",font_size="17sp",bold=True,size_hint=(.52,.06),pos_hint={"center_x":.5,"top":.972})
-        gear=CardButton(text="*",font_size="20sp",size_hint=(.105,.055),pos_hint={"right":.975,"top":.972},
+        self.half=Label(text="I POŁOWA",font_size="17sp",bold=True,size_hint=(.52,.06),pos_hint={"center_x":.5,"top":.972})
+        gear=CardButton(text="UST.",font_size="10sp",size_hint=(.105,.055),pos_hint={"right":.975,"top":.972},
                         bg=[0,0,0,.30],border=[0,0,0,0],radius=12)
         gear.bind(on_release=lambda *_:self.show_menu())
 
-        self.dial=NeonDial(size_hint=(.94,.42),pos_hint={"center_x":.5,"center_y":.685})
-        self.clock=Label(text="00:00",font_size="64sp",bold=True,size_hint=(.96,.12),pos_hint={"center_x":.5,"center_y":.69})
+        self.dial=NeonDial(size_hint=(.86,.38),pos_hint={"center_x":.5,"center_y":.69})
+        self.clock=Label(text="00:00",font_size="58sp",bold=True,size_hint=(.90,.12),pos_hint={"center_x":.5,"center_y":.70})
 
-        self.extra_panel=ExtraPanel(size_hint=(.60,.105),pos_hint={"center_x":.5,"center_y":.515},opacity=0)
+        self.extra_panel=ExtraPanel(size_hint=(.56,.095),pos_hint={"center_x":.5,"center_y":.535},opacity=0)
         self.extra_title=Label(text="CZAS DOLICZONY",font_size="11sp",bold=True,size_hint=(.6,.03),
-                               pos_hint={"center_x":.5,"center_y":.545},opacity=0)
+                               pos_hint={"center_x":.5,"center_y":.555},opacity=0)
         self.extra_lbl=Label(text="+00:01",font_size="30sp",bold=True,size_hint=(.6,.06),
-                             pos_hint={"center_x":.5,"center_y":.505},opacity=0)
+                             pos_hint={"center_x":.5,"center_y":.525},opacity=0)
         self.notice=Label(text="",font_size="12sp",bold=True,size_hint=(.82,.04),pos_hint={"center_x":.5,"center_y":.445})
 
-        self.play=RoundAction(text="▶",font_size="31sp",size_hint=(.18,.085),pos_hint={"center_x":.5,"center_y":.405})
+        self.play=RoundAction(text="START",font_size="13sp",size_hint=(.18,.085),pos_hint={"center_x":.5,"center_y":.405})
         self.play.bind(on_release=lambda *_:self.toggle())
         self.play_caption=Label(text="START",font_size="11sp",bold=True,size_hint=(.25,.035),pos_hint={"center_x":.5,"center_y":.35})
 
@@ -191,7 +240,7 @@ class Match(Screen):
             b=CardButton(text=t,font_size="11sp",radius=13); b.bind(on_release=lambda _,dd=d:self.quick(dd)); self.adjust.add_widget(b)
 
         acts=BoxLayout(spacing=10,size_hint=(.88,.061),pos_hint={"center_x":.5,"y":.185})
-        ed=CardButton(text="✎  EDYTUJ",font_size="12sp"); rs=CardButton(text="↻  RESET",font_size="12sp")
+        ed=CardButton(text="EDYTUJ",font_size="12sp"); rs=CardButton(text="RESET",font_size="12sp")
         ed.bind(on_release=lambda *_:self.editor()); rs.bind(on_release=lambda *_:self.reset_next())
         acts.add_widget(ed); acts.add_widget(rs)
 
@@ -214,10 +263,14 @@ class Match(Screen):
     def fmt(s): return f"{int(s)//60:02d}:{int(s)%60:02d}"
 
     def speak(self,m):
-        snd=self.minute_audio.get(m)
-        if snd:
-            try: snd.stop(); snd.play()
-            except Exception as e: print("minute audio",m,e)
+        phrases={15:"Minęło piętnaście minut",30:"Minęło trzydzieści minut",
+                 60:"Minęło sześćdziesiąt minut",75:"Minęło siedemdziesiąt pięć minut"}
+        ok=speak_android(phrases.get(m,f"Minęło {m} minut"))
+        if not ok:
+            snd=self.minute_audio.get(m)
+            if snd:
+                try: snd.stop(); snd.play()
+                except Exception as e: print("minute audio",m,e)
         self.notice.text=f"MINĘŁO {m} MINUT"
         Clock.schedule_once(lambda *_:setattr(self.notice,"text",""),2.4)
 
@@ -229,7 +282,7 @@ class Match(Screen):
     def toggle(self):
         if self.running:
             self.update(); self.running=False; self.started=None; command("stop")
-        else:
+                else:
             keep_screen_on(True); self.running=True; self.base=self.main+self.extra; self.started=time.monotonic()
             self.whistle_play(); command("start",self.base)
         self.refresh()
@@ -248,20 +301,33 @@ class Match(Screen):
         if old<boundary<=self.main and end not in self.fired:
             self.fired.add(end); self.whistle_play(True)
 
-    def tick(self,dt): self.update(); self.refresh()
+    def tick(self,dt):
+        self.update()
+        if self.running:
+            keep_screen_on(True)
+        self.refresh()
 
     def refresh(self):
         self.clock.text=self.fmt(self.main)
-        self.half.text=("I POŁOWA ⌄" if self.period==1 else "II POŁOWA ⌄")
-        self.play.active=self.running; self.play.text=("Ⅱ" if self.running else "▶")
+        self.half.text=("I POŁOWA" if self.period==1 else "II POŁOWA")
+        self.play.active=self.running; self.play.text=("PAUZA" if self.running else "START")
         self.play_caption.text=("PAUZA" if self.running else "START")
         if self.in_extra:
-            self.extra_panel.opacity=self.extra_title.opacity=self.extra_lbl.opacity=1
             self.extra_panel.mode=1 if self.period==1 else 2
             self.extra_lbl.text="+"+self.fmt(self.extra)
-            self.extra_lbl.color=(.12,.76,1,1) if self.period==1 else (1,.25,.27,1)
+            self.extra_lbl.color=(.12,.82,1,1) if self.period==1 else (1,.22,.24,1)
             self.dial.set(1,2 if self.period==1 else 3)
+            if not self._extra_visual:
+                self._extra_visual=True
+                for w in (self.extra_panel,self.extra_title,self.extra_lbl):
+                    w.opacity=0
+                    Animation.cancel_all(w)
+                    Animation(opacity=1,d=.34,t="out_quad").start(w)
+                # short "pop" of the added-time value
+                self.extra_lbl.font_size="25sp"
+                Animation(font_size=30,d=.34,t="out_back").start(self.extra_lbl)
         else:
+            self._extra_visual=False
             self.extra_panel.opacity=self.extra_title.opacity=self.extra_lbl.opacity=0
             st=0 if self.period==1 else 2700
             self.dial.set((self.main-st)/2700,1 if self.period==1 else 2)
@@ -308,7 +374,7 @@ class Match(Screen):
     def show_menu(self):
         m=ModalView(size_hint=(.82,.58))
         box=BoxLayout(orientation="vertical",padding=15,spacing=8)
-        box.add_widget(Label(text="ZEGAR SĘDZIEGO\nv7.0",font_size="18sp",bold=True))
+        box.add_widget(Label(text="ZEGAR SĘDZIEGO\nv7.1",font_size="18sp",bold=True))
         a=CardButton(text="TEST GWIZDKA"); a.bind(on_release=lambda *_:self.whistle_play()); box.add_widget(a)
         b=CardButton(text="TEST GŁOSU - 15 MIN"); b.bind(on_release=lambda *_:self.speak(15)); box.add_widget(b)
         c=CardButton(text="ZAMKNIJ",bg=[.03,.48,.08,.96]); c.bind(on_release=lambda *_:m.dismiss()); box.add_widget(c)
@@ -318,6 +384,7 @@ class RefApp(App):
     def build(self):
         Window.clearcolor=(0,0,0,1)
         start_service()
+        Clock.schedule_once(lambda *_:init_tts(),.35)
         Clock.schedule_once(lambda *_:keep_screen_on(True),.25)
         Clock.schedule_once(lambda *_:keep_screen_on(True),1.2)
         sm=ScreenManager(transition=FadeTransition(duration=.28))
@@ -327,9 +394,12 @@ class RefApp(App):
     def on_resume(self):
         Clock.schedule_once(lambda *_:keep_screen_on(True),.15)
     def on_pause(self):
-        keep_screen_on(False); return True
+        # Do not clear FLAG_KEEP_SCREEN_ON here: Samsung/Android can call pause
+        # for transient system UI. The timer must keep the display awake.
+        return True
     def on_stop(self):
-        keep_screen_on(False)
+        # Android releases the window flag/wakelock when the process ends.
+        pass
 
 if __name__=="__main__":
     RefApp().run()
