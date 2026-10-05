@@ -7,7 +7,9 @@ plugins {
 android {
     namespace = "pl.omulew.zegarsedziego"
     compileSdk = 35
-
+compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     defaultConfig {
         applicationId = "pl.omulew.zegarsedziego"
         minSdk = 24
