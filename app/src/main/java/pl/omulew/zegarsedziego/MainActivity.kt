@@ -368,7 +368,7 @@ private fun AddedTimePanel(extra: Int, accent: Color) {
                 spotColor = accent
             )
             .clip(shape)
-            .background(Color(0xE60A1118))
+            .background(Color(0xFF0A1118))
             .border(
                 width = 2.dp,
                 color = accent,
