@@ -259,13 +259,11 @@ private fun MatchScreen() {
                     Box(Modifier.fillMaxWidth(.88f).aspectRatio(1f), contentAlignment=Alignment.Center) {
                         NeonDial(progress, accent)
                         Text(format(state.mainSec),color=Color.White,fontSize=64.sp,fontWeight=FontWeight.Black)
-                        AnimatedVisibility(
-                            visible=inExtra,
-                            enter=fadeIn(tween(300)),
-                            modifier=Modifier.align(Alignment.BottomCenter).offset(y=24.dp)
-                        ) {
-                            AddedTimePanel(state.extraSec, accent)
-                        }
+                if (inExtra) {
+                    Box(Modifier.align(Alignment.BottomCenter).offset(y=24.dp)) {
+                        AddedTimePanel(state.extraSec, accent)
+                    }
+                }
                     }
 
                     Spacer(Modifier.height(34.dp))
