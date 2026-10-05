@@ -5,6 +5,7 @@ from kivy.core.audio import SoundLoader
 from kivy.core.window import Window
 from kivy.animation import Animation
 from kivy.utils import platform
+from kivy.metrics import dp
 from kivy.properties import ListProperty, StringProperty, NumericProperty, BooleanProperty
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
 from kivy.uix.floatlayout import FloatLayout
@@ -194,22 +195,31 @@ class ExtraPanel(Widget):
             Color(*c); RoundedRectangle(pos=self.pos,size=self.size,radius=[15])
             Color(1,1,1,.15); Line(rounded_rectangle=(self.x,self.y,self.width,self.height,15),width=1)
 
+class LoadingBar(Widget):
+    progress=NumericProperty(0)
+    def __init__(self,**kw):
+        super().__init__(**kw)
+        self.bind(pos=self.draw,size=self.draw,progress=self.draw)
+    def draw(self,*_):
+        self.canvas.clear()
+        with self.canvas:
+            Color(.10,.16,.16,.92)
+            RoundedRectangle(pos=self.pos,size=self.size,radius=[dp(8)])
+            Color(.20,1,.08,.22)
+            RoundedRectangle(pos=(self.x-5,self.y-5),size=(self.width*self.progress+10,self.height+10),radius=[dp(10)])
+            Color(.20,1,.08,1)
+            RoundedRectangle(pos=self.pos,size=(max(dp(3),self.width*self.progress),self.height),radius=[dp(8)])
+
 class Splash(Screen):
     def __init__(self,**kw):
         super().__init__(**kw)
         f=FloatLayout()
-        f.add_widget(Image(source="stadium_bg.png",allow_stretch=True,keep_ratio=False))
-        sh=Widget()
-        with sh.canvas:
-            Color(0,0,0,.30); sh.r=Rectangle(pos=sh.pos,size=sh.size)
-        sh.bind(pos=lambda w,v:setattr(w.r,"pos",v),size=lambda w,v:setattr(w.r,"size",v)); f.add_widget(sh)
-        title=Label(text="ZEGAR\nSĘDZIEGO",font_size="46sp",bold=True,halign="center",
-                    size_hint=(.9,.24),pos_hint={"center_x":.5,"center_y":.37},opacity=0)
-        sub=Label(text="ŁADOWANIE...",font_size="12sp",bold=True,size_hint=(1,.05),
-                  pos_hint={"center_x":.5,"y":.12},opacity=0)
-        f.add_widget(title); f.add_widget(sub); self.add_widget(f)
-        Clock.schedule_once(lambda *_:Animation(opacity=1,d=.55).start(title),.2)
-        Clock.schedule_once(lambda *_:Animation(opacity=1,d=.35).start(sub),.8)
+        f.add_widget(Image(source="referee_splash.png",allow_stretch=True,keep_ratio=False))
+        self.loading=LoadingBar(size_hint=(.68,.012),pos_hint={"center_x":.5,"y":.055})
+        sub=Label(text="ŁADOWANIE...",font_size="11sp",bold=True,size_hint=(1,.04),
+                  pos_hint={"center_x":.5,"y":.018})
+        f.add_widget(self.loading); f.add_widget(sub); self.add_widget(f)
+        Animation(progress=1,d=2.7,t="out_quad").start(self.loading)
 
 class Match(Screen):
     def __init__(self,**kw):
@@ -237,10 +247,10 @@ class Match(Screen):
         self.dial=NeonDial(size_hint=(.86,.38),pos_hint={"center_x":.5,"center_y":.69})
         self.clock=Label(text="00:00",font_size="58sp",bold=True,size_hint=(.90,.12),pos_hint={"center_x":.5,"center_y":.70})
 
-        self.extra_panel=ExtraPanel(size_hint=(.60,.115),pos_hint={"center_x":.5,"center_y":.535},opacity=0)
+        self.extra_panel=ExtraPanel(size_hint=(.66,.125),pos_hint={"center_x":.5,"center_y":.535},opacity=0)
         self.extra_title=Label(text="CZAS DOLICZONY",font_size="12sp",bold=True,size_hint=(.6,.03),
                                pos_hint={"center_x":.5,"center_y":.555},opacity=0)
-        self.extra_lbl=Label(text="+00:01",font_size="48sp",bold=True,size_hint=(.6,.06),
+        self.extra_lbl=Label(text="+00:01",font_size="56sp",bold=True,size_hint=(.6,.06),
                              pos_hint={"center_x":.5,"center_y":.525},opacity=0)
         self.notice=Label(text="",font_size="12sp",bold=True,size_hint=(.82,.04),pos_hint={"center_x":.5,"center_y":.445})
 
@@ -276,15 +286,12 @@ class Match(Screen):
     def fmt(s): return f"{int(s)//60:02d}:{int(s)%60:02d}"
 
     def speak(self,m):
-        phrases={15:"Minęło piętnaście minut",30:"Minęło trzydzieści minut",
-                 60:"Minęło sześćdziesiąt minut",75:"Minęło siedemdziesiąt pięć minut"}
-        ok=speak_android(phrases.get(m,f"Minęło {m} minut"))
-        if not ok:
-            snd=self.minute_audio.get(m)
-            if snd:
-                try: snd.stop(); snd.play()
-                except Exception as e: print("minute audio",m,e)
-        self.notice.text=f"MINĘŁO {m} MINUT"
+        snd=self.minute_audio.get(m)
+        if snd:
+            try:
+                snd.stop(); snd.volume=1.0; snd.play()
+            except Exception as e: print("minute audio",m,e)
+        self.notice.text=f"{m}. MINUTA"
         Clock.schedule_once(lambda *_:setattr(self.notice,"text",""),2.4)
 
     def whistle_play(self,double=False):
@@ -318,7 +325,7 @@ class Match(Screen):
         self.update()
         if self.running:
             self._screen_guard += dt
-            if self._screen_guard >= 10:
+            if self._screen_guard >= 2:
                 self._screen_guard=0
                 keep_screen_on(True)
         self.refresh()
@@ -340,8 +347,8 @@ class Match(Screen):
                     Animation.cancel_all(w)
                     Animation(opacity=1,d=.34,t="out_quad").start(w)
                 # short "pop" of the added-time value
-                self.extra_lbl.font_size="36sp"
-                Animation(font_size=48,d=.34,t="out_back").start(self.extra_lbl)
+                self.extra_lbl.font_size="42sp"
+                Animation(font_size=56,d=.34,t="out_back").start(self.extra_lbl)
         else:
             self._extra_visual=False
             self.extra_panel.opacity=self.extra_title.opacity=self.extra_lbl.opacity=0
@@ -390,7 +397,7 @@ class Match(Screen):
     def show_menu(self):
         m=ModalView(size_hint=(.82,.58))
         box=BoxLayout(orientation="vertical",padding=15,spacing=8)
-        box.add_widget(Label(text="ZEGAR SĘDZIEGO\nv7.2",font_size="18sp",bold=True))
+        box.add_widget(Label(text="ZEGAR SĘDZIEGO\nv7.3",font_size="18sp",bold=True))
         a=CardButton(text="TEST GWIZDKA"); a.bind(on_release=lambda *_:self.whistle_play()); box.add_widget(a)
         b=CardButton(text="TEST GŁOSU - 15 MIN"); b.bind(on_release=lambda *_:self.speak(15)); box.add_widget(b)
         c=CardButton(text="ZAMKNIJ",bg=[.03,.48,.08,.96]); c.bind(on_release=lambda *_:m.dismiss()); box.add_widget(c)
@@ -405,7 +412,7 @@ class RefApp(App):
         Clock.schedule_once(lambda *_:keep_screen_on(True),1.2)
         sm=ScreenManager(transition=FadeTransition(duration=.28))
         sm.add_widget(Splash(name="s")); sm.add_widget(Match(name="m"))
-        Clock.schedule_once(lambda *_:setattr(sm,"current","m"),2.2)
+        Clock.schedule_once(lambda *_:setattr(sm,"current","m"),2.8)
         return sm
     def on_resume(self):
         Clock.schedule_once(lambda *_:keep_screen_on(True),.05)
