@@ -378,7 +378,7 @@ private fun RoundStartButton(running:Boolean,onClick:()->Unit) {
         Modifier.size(92.dp).shadow(14.dp,CircleShape,ambientColor=c,spotColor=c)
             .clip(CircleShape).background(c).clickable(onClick=onClick),
         contentAlignment=Alignment.Center
-    ){ Text(if(running)"PAUZA" else "START",color=Color.White,fontWeight=FontWeight.Black,fontSize=17.sp) }
+    ){ Text(if(running)"Ⅱ" else "▶",color=Color.White,fontWeight=FontWeight.Black,fontSize=34.sp) }
 }
 
 @Composable
