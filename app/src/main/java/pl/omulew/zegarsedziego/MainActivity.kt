@@ -355,18 +355,59 @@ private fun NeonDial(progress: Float, accent: Color) {
 
 @Composable
 private fun AddedTimePanel(extra: Int, accent: Color) {
+    val shape = RoundedCornerShape(18.dp)
+
     Box(
-        Modifier.width(300.dp).height(118.dp)
-            .shadow(20.dp,RoundedCornerShape(18.dp),ambientColor=accent,spotColor=accent)
-            .clip(RoundedCornerShape(18.dp))
-            .background(accent.copy(alpha=.80f))
-            .border(1.dp,Color.White.copy(alpha=.20f),RoundedCornerShape(18.dp)),
-        contentAlignment=Alignment.Center
+        Modifier
+            .width(300.dp)
+            .height(118.dp)
+            .shadow(
+                elevation = 26.dp,
+                shape = shape,
+                ambientColor = accent,
+                spotColor = accent
+            )
+            .clip(shape)
+            .background(Color(0xE60A1118))
+            .border(
+                width = 2.dp,
+                color = accent,
+                shape = shape
+            ),
+        contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment=Alignment.CenterHorizontally) {
-            Text("CZAS DOLICZONY",color=Color.White,fontWeight=FontWeight.Bold,fontSize=15.sp)
-            Text("+${format(extra)}",color=Color.White,fontWeight=FontWeight.Black,fontSize=50.sp,
-                textAlign=TextAlign.Center)
+        Box(
+            Modifier
+                .matchParentSize()
+                .border(
+                    width = 5.dp,
+                    color = accent.copy(alpha = 0.18f),
+                    shape = shape
+                )
+        )
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                "CZAS DOLICZONY",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp
+            )
+
+            Text(
+                "+${format(extra)}",
+                color = accent,
+                fontWeight = FontWeight.Black,
+                fontSize = 50.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.shadow(
+                    elevation = 12.dp,
+                    ambientColor = accent,
+                    spotColor = accent
+                )
+            )
         }
     }
 }
