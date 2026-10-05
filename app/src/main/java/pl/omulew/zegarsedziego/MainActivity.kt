@@ -246,11 +246,11 @@ private fun MatchScreen() {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("MENU", color=Color.White, fontWeight=FontWeight.Bold,
+                Text("☰", color=Color.White, fontWeight=FontWeight.Bold,
                     modifier=Modifier.clickable { showMenu=true }.padding(6.dp))
                 Text(if(firstHalf) "I POŁOWA" else "II POŁOWA",
                     color=Color.White,fontWeight=FontWeight.Bold,fontSize=24.sp)
-                Text("UST.", color=Color.White,fontWeight=FontWeight.Bold,
+                Text("⚙", color=Color.White,fontWeight=FontWeight.Bold,
                     modifier=Modifier.clickable { showMenu=true }.padding(6.dp))
             }
 
