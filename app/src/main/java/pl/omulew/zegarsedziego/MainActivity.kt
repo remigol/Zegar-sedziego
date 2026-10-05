@@ -402,11 +402,6 @@ private fun AddedTimePanel(extra: Int, accent: Color) {
                 fontWeight = FontWeight.Black,
                 fontSize = 50.sp,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.shadow(
-                    elevation = 12.dp,
-                    ambientColor = accent,
-                    spotColor = accent
-                )
             )
         }
     }
