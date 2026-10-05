@@ -1,4 +1,5 @@
 name: Build Android APK v8
+# Rebuild trigger - no application code changes
 on:
   workflow_dispatch:
   push:
