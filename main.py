@@ -247,10 +247,10 @@ class Match(Screen):
         self.dial=NeonDial(size_hint=(.86,.38),pos_hint={"center_x":.5,"center_y":.69})
         self.clock=Label(text="00:00",font_size="58sp",bold=True,size_hint=(.90,.12),pos_hint={"center_x":.5,"center_y":.70})
 
-        self.extra_panel=ExtraPanel(size_hint=(.66,.125),pos_hint={"center_x":.5,"center_y":.535},opacity=0)
+        self.extra_panel=ExtraPanel(size_hint=(.66,.112),pos_hint={"center_x":.5,"center_y":.535},opacity=0)
         self.extra_title=Label(text="CZAS DOLICZONY",font_size="12sp",bold=True,size_hint=(.6,.03),
                                pos_hint={"center_x":.5,"center_y":.555},opacity=0)
-        self.extra_lbl=Label(text="+00:01",font_size="56sp",bold=True,size_hint=(.6,.06),
+        self.extra_lbl=Label(text="+00:01",font_size="72sp",bold=True,size_hint=(.6,.06),
                              pos_hint={"center_x":.5,"center_y":.525},opacity=0)
         self.notice=Label(text="",font_size="12sp",bold=True,size_hint=(.82,.04),pos_hint={"center_x":.5,"center_y":.445})
 
@@ -347,8 +347,8 @@ class Match(Screen):
                     Animation.cancel_all(w)
                     Animation(opacity=1,d=.34,t="out_quad").start(w)
                 # short "pop" of the added-time value
-                self.extra_lbl.font_size="42sp"
-                Animation(font_size=56,d=.34,t="out_back").start(self.extra_lbl)
+                self.extra_lbl.font_size="54sp"
+                Animation(font_size=72,d=.34,t="out_back").start(self.extra_lbl)
         else:
             self._extra_visual=False
             self.extra_panel.opacity=self.extra_title.opacity=self.extra_lbl.opacity=0
@@ -397,7 +397,7 @@ class Match(Screen):
     def show_menu(self):
         m=ModalView(size_hint=(.82,.58))
         box=BoxLayout(orientation="vertical",padding=15,spacing=8)
-        box.add_widget(Label(text="ZEGAR SĘDZIEGO\nv7.3",font_size="18sp",bold=True))
+        box.add_widget(Label(text="ZEGAR SĘDZIEGO\nv7.4",font_size="18sp",bold=True))
         a=CardButton(text="TEST GWIZDKA"); a.bind(on_release=lambda *_:self.whistle_play()); box.add_widget(a)
         b=CardButton(text="TEST GŁOSU - 15 MIN"); b.bind(on_release=lambda *_:self.speak(15)); box.add_widget(b)
         c=CardButton(text="ZAMKNIJ",bg=[.03,.48,.08,.96]); c.bind(on_release=lambda *_:m.dismiss()); box.add_widget(c)
