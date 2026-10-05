@@ -27,7 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.*\nimport androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -94,35 +94,79 @@ private fun ZegarSedziegoApp() {
 
 @Composable
 private fun SplashScreen(onDone: () -> Unit) {
-    val progress = remember { Animatable(0f) }
+    val context = LocalContext.current
+    val audio = remember { AudioEngine(context) }
+    var stage by remember { mutableIntStateOf(0) }
+    val zoom = remember { Animatable(1f) }
+    val watchZoom = remember { Animatable(.25f) }
+    val watchAlpha = remember { Animatable(0f) }
+
+    DisposableEffect(Unit) { onDispose { audio.release() } }
+
     LaunchedEffect(Unit) {
-        progress.animateTo(1f, tween(2700))
+        // 0.0–1.0 s: sędzia. Delikatne filmowe zbliżenie.
+        zoom.animateTo(1.10f, tween(900))
+        // 1.0 s: gwizdek.
+        audio.play("whistle")
+        delay(450)
+        // 1.45–3.2 s: przejście na zegarek.
+        stage = 1
+        watchAlpha.animateTo(1f, tween(250))
+        watchZoom.animateTo(1f, tween(1150))
+        delay(350)
+        // 3.2–4.0 s: tarcza zegarka wypełnia ekran.
+        stage = 2
+        watchZoom.animateTo(3.6f, tween(800))
+        // Następna klatka to prawdziwy interfejs aplikacji.
         onDone()
     }
+
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         Image(
             painterResource(R.drawable.referee_splash),
             contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = zoom.value
+                    scaleY = zoom.value
+                    alpha = if (stage == 0) 1f else .48f
+                },
             contentScale = ContentScale.Crop
         )
-        Column(
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp).fillMaxWidth(.72f),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if(stage == 0) .10f else .42f)))
+
+        if (stage >= 1) {
             Box(
-                Modifier.fillMaxWidth().height(8.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xCC152020))
+                Modifier
+                    .align(Alignment.Center)
+                    .size(220.dp)
+                    .graphicsLayer {
+                        scaleX = watchZoom.value
+                        scaleY = watchZoom.value
+                        alpha = watchAlpha.value
+                    },
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    Modifier.fillMaxWidth(progress.value).fillMaxHeight()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF45FF16))
-                )
+                Canvas(Modifier.fillMaxSize()) {
+                    val r = size.minDimension * .46f
+                    drawCircle(Color(0xFF071018), r)
+                    drawCircle(Color(0xFF18C8FF).copy(alpha=.22f), r, style=Stroke(15.dp.toPx()))
+                    drawCircle(Color(0xFF18C8FF), r, style=Stroke(5.dp.toPx()))
+                    repeat(60) { i ->
+                        val a = Math.toRadians((i * 6 - 90).toDouble())
+                        val outer = r - 8.dp.toPx()
+                        val inner = r - (if(i % 5 == 0) 25.dp.toPx() else 16.dp.toPx())
+                        drawLine(
+                            if(i % 5 == 0) Color(0xFF18C8FF) else Color(0xFF18C8FF).copy(alpha=.45f),
+                            Offset(center.x + cos(a).toFloat()*inner, center.y + sin(a).toFloat()*inner),
+                            Offset(center.x + cos(a).toFloat()*outer, center.y + sin(a).toFloat()*outer),
+                            strokeWidth = if(i % 5 == 0) 3.dp.toPx() else 1.dp.toPx()
+                        )
+                    }
+                }
+                Text("00:00", color=Color.White, fontSize=48.sp, fontWeight=FontWeight.Black)
             }
-            Spacer(Modifier.height(8.dp))
-            Text("ŁADOWANIE…", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
