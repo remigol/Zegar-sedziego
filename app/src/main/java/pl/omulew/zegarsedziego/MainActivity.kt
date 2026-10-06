@@ -36,6 +36,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
+import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
 import kotlin.math.cos
 import kotlin.math.min
@@ -87,9 +88,44 @@ private class AudioEngine(context: android.content.Context) {
 private fun ZegarSedziegoApp() {
     var splash by rememberSaveable { mutableStateOf(true) }
     if (splash) {
-        SplashScreen { splash = false }
+        VideoIntroScreen { splash = false }
     } else {
         MatchScreen()
+    }
+}
+
+@Composable
+private fun VideoIntroScreen(onDone: () -> Unit) {
+    val context = LocalContext.current
+    val introId = remember {
+        context.resources.getIdentifier("referee_intro", "raw", context.packageName)
+    }
+
+    // Dopóki plik MP4 nie jest obecny w res/raw, zachowujemy dotychczasowe intro,
+    // dzięki czemu projekt nadal się kompiluje.
+    if (introId == 0) {
+        SplashScreen(onDone)
+        return
+    }
+
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { ctx ->
+                android.widget.VideoView(ctx).apply {
+                    setVideoURI(android.net.Uri.parse("android.resource://${ctx.packageName}/$introId"))
+                    setOnPreparedListener { player ->
+                        player.isLooping = false
+                        start()
+                    }
+                    setOnCompletionListener { onDone() }
+                    setOnErrorListener { _, _, _ ->
+                        onDone()
+                        true
+                    }
+                }
+            }
+        )
     }
 }
 
