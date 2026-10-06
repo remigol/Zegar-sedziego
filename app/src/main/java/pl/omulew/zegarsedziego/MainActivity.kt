@@ -2,6 +2,7 @@ package pl.omulew.zegarsedziego
 
 import android.media.AudioAttributes
 import android.media.SoundPool
+import android.media.MediaPlayer
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.WindowManager
@@ -59,29 +60,66 @@ private data class ClockState(
     val running: Boolean = false
 )
 
-private class AudioEngine(context: android.content.Context) {
-    private val pool = SoundPool.Builder()
-        .setMaxStreams(3)
-        .setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build()
-        ).build()
+private class AudioEngine(private val context: android.content.Context) {
+    private var player: MediaPlayer? = null
+    private val queue = java.util.ArrayDeque<Int>()
 
-    private val sounds = mapOf(
-        "whistle" to pool.load(context, R.raw.whistle, 1),
-        "15" to pool.load(context, R.raw.minute_15, 1),
-        "30" to pool.load(context, R.raw.minute_30, 1),
-        "60" to pool.load(context, R.raw.minute_60, 1),
-        "75" to pool.load(context, R.raw.minute_75, 1),
-    )
-    fun play(key: String) { sounds[key]?.let { pool.play(it, 1f, 1f, 1, 0, 1f) } }
+    private fun rawId(key: String): Int = when (key) {
+        "whistle" -> R.raw.whistle
+        "15" -> R.raw.minute_15
+        "30" -> R.raw.minute_30
+        "60" -> R.raw.minute_60
+        "75" -> R.raw.minute_75
+        else -> 0
+    }
+
+    @Synchronized
+    fun play(key: String) {
+        val id = rawId(key)
+        if (id == 0) return
+        queue.addLast(id)
+        playNext()
+    }
+
+    @Synchronized
+    private fun playNext() {
+        if (player != null || queue.isEmpty()) return
+        val id = queue.removeFirst()
+        player = MediaPlayer.create(context, id)?.apply {
+            setVolume(1f, 1f)
+            setOnCompletionListener {
+                synchronized(this@AudioEngine) {
+                    it.release()
+                    player = null
+                    playNext()
+                }
+            }
+            setOnErrorListener { mp, _, _ ->
+                synchronized(this@AudioEngine) {
+                    mp.release()
+                    player = null
+                    playNext()
+                }
+                true
+            }
+            start()
+        }
+        if (player == null) playNext()
+    }
+
     fun doubleWhistle() {
         play("whistle")
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ play("whistle") }, 650)
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            play("whistle")
+        }, 650)
     }
-    fun release() = pool.release()
+
+    @Synchronized
+    fun release() {
+        queue.clear()
+        player?.release()
+        player = null
+    }
 }
 
 @Composable
