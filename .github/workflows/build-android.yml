@@ -1,5 +1,5 @@
 name: Build Android APK v8
-# Rebuild trigger - GitHub Actions recovered 2026-10-06
+# Rebuild trigger - intro MP4 2026-10-06
 on:
   workflow_dispatch:
   push:
