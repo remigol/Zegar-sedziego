@@ -1,0 +1,67 @@
+name: Android UI API 35
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main, 'codex/android-ui-*']
+permissions:
+  contents: read
+concurrency:
+  group: android-ui-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  emulator:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Prepare evidence
+        run: |
+          mkdir -p evidence
+          echo "Build or emulator has not completed; see logs." > evidence/report.md
+          git rev-parse HEAD > evidence/commit.txt
+      - name: Validate smoke test syntax
+        run: python3 -m py_compile scripts/android_ui_smoke.py
+      - name: Build APK and lint
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle :app:assembleDebug :app:lintDebug --stacktrace --console=plain 2>&1 | tee evidence/gradle.log
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install, launch and test on API 35
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: python3 scripts/android_ui_smoke.py --apk app/build/outputs/apk/debug/app-debug.apk --output evidence
+      - name: Publish report summary
+        if: always()
+        run: cat evidence/report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload evidence and APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-api35-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            evidence/
+            app/build/outputs/apk/debug/*.apk
+            app/build/reports/
+            app/build/test-results/
+
