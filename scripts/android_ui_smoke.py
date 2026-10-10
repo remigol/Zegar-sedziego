@@ -20,13 +20,26 @@ class Smoke:
     def __init__(self, output):
         self.output = output
         self.results = []
+        self.observations = []
         self.last = None
 
     def tree(self):
-        adb("shell", "uiautomator", "dump", "/sdcard/window.xml")
-        raw = adb("shell", "cat", "/sdcard/window.xml")
-        self.last = raw
-        return ET.fromstring(raw)
+        for attempt in range(3):
+            try:
+                adb("shell", "rm", "-f", "/sdcard/window.xml")
+                dump = adb("shell", "uiautomator", "dump", "/sdcard/window.xml")
+                with (self.output / "uiautomator.log").open("ab") as log:
+                    log.write(dump + b"\n")
+                raw = adb("shell", "cat", "/sdcard/window.xml")
+                root = ET.fromstring(raw)
+                self.last = raw
+                return root
+            except (subprocess.SubprocessError, ET.ParseError) as exc:
+                with (self.output / "uiautomator.log").open("a") as log:
+                    log.write(f"Dump attempt {attempt + 1}: {exc}\n")
+                if attempt == 2:
+                    raise
+                time.sleep(.5)
 
     def nodes(self, root, text):
         return [n for n in root.iter("node")
@@ -88,8 +101,13 @@ class Smoke:
     def launch(self):
         self.wait("START", timeout=90)  # Let the actual intro video finish.
         self.wait("00:00")
-        self.wait("EDYTUJ")
         assert adb("shell", "pidof", PACKAGE).strip(), "App process missing"
+        root = self.tree()
+        for label in ("EDYTUJ", "RESET"):
+            if not self.nodes(root, label):
+                self.observations.append(
+                    f"{label}: brak widocznego elementu w drzewie UI na tym profilu; "
+                    "sprawdzić przycięcie układu na zrzucie 01-main.png.")
         self.capture("01-main")
 
     def start_pause(self):
@@ -143,6 +161,7 @@ class Smoke:
                  "Błędy mają szczegóły w results.json, junit.xml i logcat.txt.",
                  "Zrzuty PNG i drzewa XML dokumentują rzeczywiste stany aplikacji.",
                  "", "## Ocena wyglądu",
+                 *self.observations,
                  "Automat nie ocenia estetyki ani poprawności dźwięku. "
                  "Zrzuty należy obejrzeć przed zatwierdzeniem zmian.",
                  "Sprawdzić: przycięcie dolnych przycisków, kontrast na tle stadionu, "

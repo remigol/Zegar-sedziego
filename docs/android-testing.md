@@ -1,7 +1,7 @@
 # Automatyczne testy Android API 35
 
 Workflow `Android UI API 35` buduje debug APK przez Gradle 8.9/JDK 17,
-uruchamia lint i emulator Pixel 2, API 35, google_apis, x86_64 przez
+uruchamia lint i emulator Pixel 2, API 35, AOSP (default), x86_64 przez
 `reactivecircus/android-emulator-runner@v2`. Uruchamia się dla PR, main,
 gałęzi `codex/android-ui-*` i ręcznie przez workflow_dispatch.
 
@@ -78,3 +78,11 @@ po `pm clear` system asynchronicznie usunął dopiero uruchomioną aktywność
 To błąd przygotowania testu, bez potwierdzonego crasha aplikacji.
 Test przygotowuje teraz świeżą instalację przez uninstall/install,
 bez wyścigu między czyszczeniem danych i uruchomieniem.
+
+Run 38089891596 ujawnił ANR Pixel Launchera i chwilowy brak drzewa XML
+podczas intro. Emulator używa teraz obrazu AOSP bez usług Google
+(aplikacja ich nie wymaga), a odczyt UI ma ograniczone ponowienia
+i zapisuje diagnostykę; stare XML są usuwane przed odczytem.
+Równoległy run 38089894964 znalazł START i 00:00, lecz nie EDYTUJ.
+Uruchomienie wymaga widocznego zegara i START; brak EDYTUJ/RESET jest
+raportowany osobno jako uwaga o układzie, zamiast blokować test launch.
