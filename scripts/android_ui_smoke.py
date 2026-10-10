@@ -166,8 +166,12 @@ def main():
             logcat = subprocess.Popen(["adb", "logcat", "-v", "threadtime"], stdout=log,
                                       stderr=subprocess.STDOUT)
             def install_launch():
-                (output / "install.txt").write_bytes(adb("install", "-r", args.apk))
-                adb("shell", "pm", "clear", PACKAGE)
+                # pm clear can remove a just-started activity asynchronously on API 35.
+                # A fresh install resets data before launch without that race.
+                installed = adb("shell", "pm", "list", "packages", PACKAGE).decode().splitlines()
+                if "package:" + PACKAGE in installed:
+                    adb("uninstall", PACKAGE)
+                (output / "install.txt").write_bytes(adb("install", args.apk))
                 (output / "launch.txt").write_bytes(
                     adb("shell", "am", "start", "-W", "-n", PACKAGE + "/.MainActivity"))
                 smoke.launch()

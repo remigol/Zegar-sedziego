@@ -5,7 +5,7 @@ uruchamia lint i emulator Pixel 2, API 35, google_apis, x86_64 przez
 `reactivecircus/android-emulator-runner@v2`. Uruchamia się dla PR, main,
 gałęzi `codex/android-ui-*` i ręcznie przez workflow_dispatch.
 
-Test jest czarną skrzynką: instaluje APK przez adb, czyści dane, uruchamia
+Test jest czarną skrzynką: usuwa poprzednią instalację, instaluje APK przez adb, uruchamia
 MainActivity i czeka do 90 sekund na koniec rzeczywistego intro.
 Python korzysta z UI Automator oraz tekstu i klikalnego rodzica elementu,
 bez zmian semantyki, wyglądu czy zachowania aplikacji.
@@ -68,3 +68,13 @@ wizualnymi:
 Ten workflow nie testuje granic 45/90 minut, obrotu, przywracania stanu,
 audio ani wielu rozmiarów ekranu. Nie wykonuje oceny estetyki i nie zmienia UI.
 Rozszerzenia mogą dodać profile i scenariusze edycji/czasu doliczonego.
+
+## Pierwsze wykonanie CI
+
+Run 38089503469 potwierdził budowanie, lint, uruchomienie emulatora i
+zapis artefaktów także po błędzie. Test launch nie przeszedł:
+po `pm clear` system asynchronicznie usunął dopiero uruchomioną aktywność
+(`Force removing ActivityRecord` w logcat), a zrzut pokazał launcher.
+To błąd przygotowania testu, bez potwierdzonego crasha aplikacji.
+Test przygotowuje teraz świeżą instalację przez uninstall/install,
+bez wyścigu między czyszczeniem danych i uruchomieniem.
