@@ -7,9 +7,10 @@ plugins {
 android {
     namespace = "pl.omulew.zegarsedziego"
     compileSdk = 35
-compileOptions {
+    compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
+    }
     defaultConfig {
         applicationId = "pl.omulew.zegarsedziego"
         minSdk = 24
@@ -17,9 +18,7 @@ compileOptions {
         versionCode = 80
         versionName = "8.0"
     }
-
     buildFeatures { compose = true }
-
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
@@ -37,7 +36,8 @@ dependencies {
 }
 
 kotlin {
-    jvmToolchain(8)
-}
-
+    jvmToolchain(17)
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8)
+    }
 }
