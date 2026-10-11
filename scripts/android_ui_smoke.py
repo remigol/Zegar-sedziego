@@ -116,7 +116,7 @@ class Smoke:
             labels = [n for n in node.iter() if n.get("text")]
             actual = " ".join(" ".join(n.get("text", "").split()) for n in labels)
             assert description in actual, f"Missing full label: {description}: {actual!r}"
-            # Two lines at 15sp must fit vertically; do not accept a squashed button.
+            # Two 18sp line heights must fit vertically; reject a squashed button.
             if description not in ("EDYTUJ", "RESET"):
                 required = 2 * 18 * font_scale * density / 160
                 assert rect[3]-rect[1] >= required, f"Clipped two-line label: {description}"
@@ -144,13 +144,13 @@ class Smoke:
             rectangles["extra"] = self.bounds(self.described(root, "Panel czasu doliczonego"))
             self.described(root, "Czas główny")
             assert self.nodes(root, "CZAS DOLICZONY"), "Added time label missing"
-        for name, rect in rectangles.items():
-            assert contained(rect), f"Outside safe area: {name}: {rect}"
+        for element, rect in rectangles.items():
+            assert contained(rect), f"Outside safe area: {element}: {rect}"
         items = list(rectangles.items())
-        for i, (name, a) in enumerate(items):
+        for i, (element, a) in enumerate(items):
             for other, b in items[i+1:]:
                 overlap = min(a[2], b[2]) > max(a[0], b[0]) and min(a[3], b[3]) > max(a[1], b[1])
-                assert not overlap, f"Overlapping elements: {name}, {other}"
+                assert not overlap, f"Overlapping elements: {element}, {other}"
         phase = name or ("extra" if extra else "main")
         (self.output / f"geometry-{phase}.json").write_text(
             json.dumps({"safe": safe, "density": density, "font_scale": font_scale,
