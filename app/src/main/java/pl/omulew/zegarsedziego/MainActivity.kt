@@ -33,6 +33,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -359,7 +362,12 @@ private fun MatchScreen() {
         )
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha=.38f)))
 
-        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+        BoxWithConstraints(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
+            .semantics { contentDescription = "Obszar meczu" }) {
+        val compact = maxHeight < 760.dp
+        val controlHeight = if (compact) 56.dp else 68.dp
+        val startSize = if (compact) 80.dp else 92.dp
+        Column(Modifier.fillMaxSize()) {
             Row(
                 Modifier.fillMaxWidth().height(56.dp).padding(horizontal=18.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -373,39 +381,53 @@ private fun MatchScreen() {
                     modifier=Modifier.clickable { showMenu=true }.padding(6.dp))
             }
 
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment=Alignment.Center) {
-                Column(horizontalAlignment=Alignment.CenterHorizontally, modifier=Modifier.fillMaxWidth()) {
-                    Box(Modifier.fillMaxWidth(.88f).aspectRatio(1f), contentAlignment=Alignment.Center) {
+            Column(Modifier.fillMaxWidth().weight(1f),
+                horizontalAlignment=Alignment.CenterHorizontally) {
+                // Weighted dial is measured after the controls, so they retain their height.
+                BoxWithConstraints(Modifier.fillMaxWidth().weight(1f),
+                    contentAlignment=Alignment.Center) {
+                    val panelHeight = if (compact) 96.dp else 118.dp
+                    val panelSpace = if (inExtra) panelHeight + 8.dp else 0.dp
+                    val dialSize = minOf(maxWidth * .88f, (maxHeight - panelSpace).coerceAtLeast(0.dp))
+                    val timeSize = with(LocalDensity.current) {
+                        minOf(64.sp.toPx(), dialSize.toPx() / 3.3f).toSp()
+                    }
+                    Column(horizontalAlignment=Alignment.CenterHorizontally) {
+                    Box(Modifier.size(dialSize).semantics { contentDescription = "Tarcza zegara" },
+                        contentAlignment=Alignment.Center) {
                         NeonDial(progress, accent)
-                        Text(format(state.mainSec),color=Color.White,fontSize=64.sp,fontWeight=FontWeight.Black)
-                if (inExtra) {
-                    Box(Modifier.align(Alignment.BottomCenter).offset(y=24.dp)) {
-                        AddedTimePanel(state.extraSec, accent)
+                        Text(format(state.mainSec),color=Color.White,fontSize=timeSize,
+                            fontWeight=FontWeight.Black,
+                            modifier=Modifier.semantics { contentDescription = "Czas główny" })
+                    }
+                    if (inExtra) {
+                        Spacer(Modifier.height(8.dp))
+                        AddedTimePanel(state.extraSec, accent, panelHeight)
+                    }
                     }
                 }
-                    }
 
-                    Spacer(Modifier.height(34.dp))
-                    RoundStartButton(state.running, ::toggle)
+                    Spacer(Modifier.height(if (compact) 8.dp else 34.dp))
+                    RoundStartButton(state.running, ::toggle, startSize)
                     Text(if(state.running) "PAUZA" else "START",color=Color.White,
                         fontWeight=FontWeight.Bold,fontSize=13.sp)
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(if (compact) 12.dp else 20.dp))
 
                     Row(Modifier.fillMaxWidth().padding(horizontal=28.dp), horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                        SmallButton("-1\nMIN",Modifier.weight(1f)){adjust(-60)}
-                        SmallButton("-10\nS",Modifier.weight(1f)){adjust(-10)}
-                        SmallButton("+10\nS",Modifier.weight(1f)){adjust(10)}
-                        SmallButton("+1\nMIN",Modifier.weight(1f)){adjust(60)}
+                        SmallButton("-1\nMIN",Modifier.weight(1f),controlHeight){adjust(-60)}
+                        SmallButton("-10\nS",Modifier.weight(1f),controlHeight){adjust(-10)}
+                        SmallButton("+10\nS",Modifier.weight(1f),controlHeight){adjust(10)}
+                        SmallButton("+1\nMIN",Modifier.weight(1f),controlHeight){adjust(60)}
                     }
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(if (compact) 8.dp else 12.dp))
                     Row(Modifier.fillMaxWidth().padding(horizontal=40.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                        SmallButton("EDYTUJ",Modifier.weight(1f)){showEditor=true}
-                        SmallButton("RESET",Modifier.weight(1f)){resetNext()}
+                        SmallButton("EDYTUJ",Modifier.weight(1f),controlHeight){showEditor=true}
+                        SmallButton("RESET",Modifier.weight(1f),controlHeight){resetNext()}
                     }
-                }
             }
 
             HalfBar(firstHalf, accent)
+        }
         }
     }
 
@@ -473,13 +495,14 @@ private fun NeonDial(progress: Float, accent: Color) {
 }
 
 @Composable
-private fun AddedTimePanel(extra: Int, accent: Color) {
+private fun AddedTimePanel(extra: Int, accent: Color, panelHeight: Dp = 118.dp) {
     val shape = RoundedCornerShape(18.dp)
 
     Box(
         Modifier
             .width(300.dp)
-            .height(118.dp)
+            .height(panelHeight)
+            .semantics { contentDescription = "Panel czasu doliczonego" }
             .shadow(
                 elevation = 26.dp,
                 shape = shape,
@@ -519,7 +542,7 @@ private fun AddedTimePanel(extra: Int, accent: Color) {
                 "+${format(extra)}",
                 color = accent,
                 fontWeight = FontWeight.Black,
-                fontSize = 50.sp,
+                fontSize = if (panelHeight < 118.dp) 40.sp else 50.sp,
                 textAlign = TextAlign.Center,
             )
         }
@@ -527,18 +550,19 @@ private fun AddedTimePanel(extra: Int, accent: Color) {
 }
 
 @Composable
-private fun RoundStartButton(running:Boolean,onClick:()->Unit) {
+private fun RoundStartButton(running:Boolean,onClick:()->Unit,buttonSize:Dp=92.dp) {
     val c=if(running) Color(0xFFFF1118) else Color(0xFF14D52D)
     Box(
-        Modifier.size(92.dp).shadow(14.dp,CircleShape,ambientColor=c,spotColor=c)
+        Modifier.size(buttonSize).shadow(14.dp,CircleShape,ambientColor=c,spotColor=c)
             .clip(CircleShape).background(c).clickable(onClick=onClick),
         contentAlignment=Alignment.Center
     ){ Text(if(running)"Ⅱ" else "▶",color=Color.White,fontWeight=FontWeight.Black,fontSize=34.sp) }
 }
 
 @Composable
-private fun SmallButton(text:String, modifier:Modifier=Modifier,onClick:()->Unit) {
-    Box(modifier.height(68.dp).clip(RoundedCornerShape(12.dp))
+private fun SmallButton(text:String, modifier:Modifier=Modifier,buttonHeight:Dp=68.dp,onClick:()->Unit) {
+    Box(modifier.height(buttonHeight).clip(RoundedCornerShape(12.dp))
+        .semantics { contentDescription = text.replace("\n", " ") }
         .background(Color(0xE6111919)).border(1.dp,Color(0xFF3C4747),RoundedCornerShape(12.dp))
         .clickable(onClick=onClick),contentAlignment=Alignment.Center) {
         Text(text,color=Color.White,fontWeight=FontWeight.Bold,textAlign=TextAlign.Center,fontSize=15.sp)
