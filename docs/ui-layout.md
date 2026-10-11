@@ -31,6 +31,7 @@ nie firmware One UI ani fizyczne urządzenie Samsunga.
 - Wszystkie cztery korekty mają pełne etykiety wraz z MIN/S.
 - EDYTUJ, RESET i korekty są klikalne, w bezpiecznym obszarze,
   mają co najmniej 48×48 dp i nie nachodzą na siebie ani na tarczę.
+- Ikony nagłówka i pasek połowy również mieszczą się w obszarze ekranu.
 - Dwa wiersze tekstu mieszczą się w kontrolce przy danej skali czcionki.
 - Zegar działa po START, zatrzymuje się po PAUZA i wznawia.
 - Cztery korekty zmieniają zatrzymany czas o właściwą wartość.
@@ -52,3 +53,10 @@ Zmiana nie obejmuje pełnego zestawu testów dźwięku i wygaszania ekranu.
 Nie zmienia istniejących reguł korekt, edycji, resetowania ani kolejki audio.
 PR #1 i main nie są scalane; nowa gałąź zawiera własną konfigurację CI
 i konieczną poprawkę konfiguracji Gradle.
+
+Pierwsze wykonanie wykryło, że opis dostępności kontrolki jest dzieckiem
+klikalnego węzła. Asercje i kliknięcia korzystają teraz z właściwego
+klikalnego rodzica, bez zgadywania współrzędnych. Pomiar nagłówka i wysokości
+wierszy tekstu uwzględnia powiększoną czcionkę. PNG jest pobierany po krótkim
+oczekiwaniu na wyrenderowanie interfejsu; każde wykonanie zachowuje wyniki
+rzeczywiście testowanego commita.

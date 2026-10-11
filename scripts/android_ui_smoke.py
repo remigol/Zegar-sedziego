@@ -70,7 +70,7 @@ class Smoke:
 
     @staticmethod
     def bounds(node):
-        return tuple(map(int, re.findall(r"\d+", node.get("bounds", ""))))
+        return tuple(map(int, re.findall(r"-?\d+", node.get("bounds", ""))))
 
     def described(self, root, description):
         matches = [n for n in root.iter("node") if n.get("package") == PACKAGE
@@ -78,9 +78,16 @@ class Smoke:
         assert len(matches) == 1, f"Missing/ambiguous element: {description!r}"
         return matches[0]
 
+    def clickable(self, root, node):
+        parents = {child: parent for parent in root.iter() for child in parent}
+        while node.get("clickable") != "true" and node in parents:
+            node = parents[node]
+        assert node.get("clickable") == "true", "No clickable ancestor"
+        return node
+
     def tap_described(self, description):
-        node = self.described(self.tree(), description)
-        assert node.get("clickable") == "true", f"Not clickable: {description}"
+        root = self.tree()
+        node = self.clickable(root, self.described(root, description))
         x1, y1, x2, y2 = self.bounds(node)
         adb("shell", "input", "tap", str((x1+x2)//2), str((y1+y2)//2))
 
@@ -91,7 +98,7 @@ class Smoke:
             self.tap_described(description)
             self.wait(expected)
 
-    def geometry(self, density, font_scale, extra=False):
+    def geometry(self, density, font_scale, extra=False, name=None):
         root = self.tree()
         safe = self.bounds(self.described(root, "Obszar meczu"))
         parents = {child: parent for parent in root.iter() for child in parent}
@@ -100,8 +107,7 @@ class Smoke:
             return (safe[0] <= rect[0] < rect[2] <= safe[2]
                     and safe[1] <= rect[1] < rect[3] <= safe[3])
         for description in ("-1 MIN", "-10 S", "+10 S", "+1 MIN", "EDYTUJ", "RESET"):
-            node = self.described(root, description)
-            assert node.get("clickable") == "true", f"Not clickable: {description}"
+            node = self.clickable(root, self.described(root, description))
             rect = self.bounds(node)
             assert contained(rect), f"Outside safe area: {description}: {rect}, {safe}"
             minimum = 48 * density / 160
@@ -112,7 +118,7 @@ class Smoke:
             assert description in actual, f"Missing full label: {description}: {actual!r}"
             # Two lines at 15sp must fit vertically; do not accept a squashed button.
             if description not in ("EDYTUJ", "RESET"):
-                required = 2 * 15 * font_scale * density / 160
+                required = 2 * 18 * font_scale * density / 160
                 assert rect[3]-rect[1] >= required, f"Clipped two-line label: {description}"
             for label in labels:
                 lr = self.bounds(label)
@@ -128,6 +134,12 @@ class Smoke:
         assert min(rectangles["START/PAUZA"][2]-rectangles["START/PAUZA"][0],
                    rectangles["START/PAUZA"][3]-rectangles["START/PAUZA"][1]) >= 48*density/160-1
         rectangles["dial"] = self.bounds(self.described(root, "Tarcza zegara"))
+        rectangles["half-bar"] = self.bounds(self.described(root, "Pasek połowy"))
+        assert rectangles["half-bar"][3]-rectangles["half-bar"][1] >= 8*density/160-1
+        for text in ("☰", "⚙"):
+            matches = self.nodes(root, text)
+            assert len(matches) == 1, f"Header control missing: {text}"
+            rectangles[text] = self.bounds(self.clickable(root, matches[0]))
         if extra:
             rectangles["extra"] = self.bounds(self.described(root, "Panel czasu doliczonego"))
             self.described(root, "Czas główny")
@@ -139,7 +151,7 @@ class Smoke:
             for other, b in items[i+1:]:
                 overlap = min(a[2], b[2]) > max(a[0], b[0]) and min(a[3], b[3]) > max(a[1], b[1])
                 assert not overlap, f"Overlapping elements: {name}, {other}"
-        phase = "extra" if extra else "main"
+        phase = name or ("extra" if extra else "main")
         (self.output / f"geometry-{phase}.json").write_text(
             json.dumps({"safe": safe, "density": density, "font_scale": font_scale,
                         "rectangles": rectangles}, indent=2), encoding="utf-8")
@@ -168,11 +180,11 @@ class Smoke:
         self.tap("Ⅱ")
         self.wait("START")
         self.wait("45:00")
-        self.geometry(density, font_scale, extra=True)
+        self.geometry(density, font_scale, extra=True, name="extra-45")
         self.capture("05-added-time")
         self.tap("RESET")  # Existing transition to II half remains unchanged.
         self.wait("45:00")
-        self.geometry(density, font_scale)
+        self.geometry(density, font_scale, name="second-half")
         self.capture("06-second-half")
         self.tap("EDYTUJ")
         root = self.wait("+1m")
@@ -187,7 +199,7 @@ class Smoke:
         self.tap("Ⅱ")
         self.wait("START")
         self.wait("90:00")
-        self.geometry(density, font_scale, extra=True)
+        self.geometry(density, font_scale, extra=True, name="extra-90")
         self.capture("07-added-time-red")
 
     def timer(self):
@@ -199,6 +211,7 @@ class Smoke:
         return m*60+s
 
     def capture(self, name):
+        time.sleep(.75)  # Allow the rendered frame to catch up with the semantics tree.
         (self.output / f"{name}.png").write_bytes(adb("exec-out", "screencap", "-p"))
         self.tree()
         (self.output / f"{name}.xml").write_bytes(self.last)

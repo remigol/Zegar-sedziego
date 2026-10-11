@@ -369,15 +369,15 @@ private fun MatchScreen() {
         val startSize = if (compact) 80.dp else 92.dp
         Column(Modifier.fillMaxSize()) {
             Row(
-                Modifier.fillMaxWidth().height(56.dp).padding(horizontal=18.dp),
+                Modifier.fillMaxWidth().heightIn(min=56.dp).padding(horizontal=18.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("☰", color=Color.White, fontWeight=FontWeight.Bold, fontSize=32.sp,
+                Text("☰", color=Color.White, fontWeight=FontWeight.Bold, fontSize=32.sp, lineHeight=36.sp,
                     modifier=Modifier.clickable { showMenu=true }.padding(6.dp))
                 Text(if(firstHalf) "I POŁOWA" else "II POŁOWA",
-                    color=Color.White,fontWeight=FontWeight.Bold,fontSize=24.sp)
-                Text("⚙", color=Color.White,fontWeight=FontWeight.Bold,fontSize=32.sp,
+                    color=Color.White,fontWeight=FontWeight.Bold,fontSize=24.sp,lineHeight=28.sp)
+                Text("⚙", color=Color.White,fontWeight=FontWeight.Bold,fontSize=32.sp,lineHeight=36.sp,
                     modifier=Modifier.clickable { showMenu=true }.padding(6.dp))
             }
 
@@ -410,7 +410,7 @@ private fun MatchScreen() {
                     Spacer(Modifier.height(if (compact) 8.dp else 34.dp))
                     RoundStartButton(state.running, ::toggle, startSize)
                     Text(if(state.running) "PAUZA" else "START",color=Color.White,
-                        fontWeight=FontWeight.Bold,fontSize=13.sp)
+                        fontWeight=FontWeight.Bold,fontSize=13.sp,lineHeight=16.sp)
                     Spacer(Modifier.height(if (compact) 12.dp else 20.dp))
 
                     Row(Modifier.fillMaxWidth().padding(horizontal=28.dp), horizontalArrangement=Arrangement.spacedBy(6.dp)) {
@@ -556,7 +556,7 @@ private fun RoundStartButton(running:Boolean,onClick:()->Unit,buttonSize:Dp=92.d
         Modifier.size(buttonSize).shadow(14.dp,CircleShape,ambientColor=c,spotColor=c)
             .clip(CircleShape).background(c).clickable(onClick=onClick),
         contentAlignment=Alignment.Center
-    ){ Text(if(running)"Ⅱ" else "▶",color=Color.White,fontWeight=FontWeight.Black,fontSize=34.sp) }
+    ){ Text(if(running)"Ⅱ" else "▶",color=Color.White,fontWeight=FontWeight.Black,fontSize=34.sp,lineHeight=40.sp) }
 }
 
 @Composable
@@ -565,7 +565,7 @@ private fun SmallButton(text:String, modifier:Modifier=Modifier,buttonHeight:Dp=
         .semantics { contentDescription = text.replace("\n", " ") }
         .background(Color(0xE6111919)).border(1.dp,Color(0xFF3C4747),RoundedCornerShape(12.dp))
         .clickable(onClick=onClick),contentAlignment=Alignment.Center) {
-        Text(text,color=Color.White,fontWeight=FontWeight.Bold,textAlign=TextAlign.Center,fontSize=15.sp)
+        Text(text,color=Color.White,fontWeight=FontWeight.Bold,textAlign=TextAlign.Center,fontSize=15.sp,lineHeight=18.sp)
     }
 }
 
@@ -573,11 +573,12 @@ private fun SmallButton(text:String, modifier:Modifier=Modifier,buttonHeight:Dp=
 private fun HalfBar(first:Boolean,accent:Color) {
     Column(Modifier.fillMaxWidth().padding(horizontal=52.dp,vertical=18.dp)) {
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){
-            Text("I POŁOWA",color=if(first) Color(0xFF75FF31) else Color.White.copy(.65f),fontSize=12.sp)
-            Text("II POŁOWA",color=if(!first) accent else Color.White.copy(.65f),fontSize=12.sp)
+            Text("I POŁOWA",color=if(first) Color(0xFF75FF31) else Color.White.copy(.65f),fontSize=12.sp,lineHeight=16.sp)
+            Text("II POŁOWA",color=if(!first) accent else Color.White.copy(.65f),fontSize=12.sp,lineHeight=16.sp)
         }
         Spacer(Modifier.height(8.dp))
-        Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF36403C))){
+        Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF36403C))
+            .semantics { contentDescription = "Pasek połowy" }){
             Box(Modifier.fillMaxWidth(if(first).5f else 1f).fillMaxHeight().background(if(first)Color(0xFF75FF31) else accent))
         }
     }
